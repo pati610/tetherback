@@ -42,12 +42,13 @@ for partname, devname, partn, size in partmap:
         print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
         sp.check_call(('adb','shell','umount /dev/block/%s'%devname), stdout=sp.DEVNULL)
 
+        fn = '%s.img.gz' % partname
         child = sp.Popen(('adb','shell','stty -onlcr && dd if=/dev/block/%s 2>/dev/null | gzip -f'%devname), stdout=sp.PIPE)
 
-        pbwidgets = ['  %s: ' % devname, Percentage(), ' ', ETA(), ' ', FileTransferSpeed()]
+        pbwidgets = ['  %s: ' % fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed()]
         pbar = ProgressBar(maxval=size*512, widgets=pbwidgets).start()
 
-        with open('%s.img.gz' % partname, 'wb') as out:
+        with open(fn, 'wb') as out:
             for block in iter(lambda: child.stdout.read(65536), b''):
                 out.write(block)
                 pbar.update(out.tell())
