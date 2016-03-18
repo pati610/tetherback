@@ -42,34 +42,27 @@ for partname, devname, partn, size in partmap:
     if partname in ('boot','system','userdata'):
         print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
 
-        port = 5600+partn
-        sp.check_call(('adb','forward','tcp:%d'%port, 'tcp:%d'%port))
         if partname=='boot':
-            child = sp.Popen(('adb','shell','dd if=/dev/block/%s | gzip | nc -l -p%d -w3'%(devname,port)), stdout=sp.DEVNULL)
+            child = sp.Popen(('adb','shell','stty -onlcr && dd if=/dev/block/%s 2>/dev/null | gzip -f'%devname), stdout=sp.PIPE)
             fn = 'boot.emmc.win'
         elif partname=='userdata':
             sp.check_call(('adb','shell','mount -r /data'), stdout=sp.DEVNULL)
-            child = sp.Popen(('adb','shell','tar -cpz --exclude="media*" -C /data . | nc -l -p%d -w3'%port), stdout=sp.DEVNULL)
+            child = sp.Popen(('adb','shell','stty -onlcr && tar -cpz --exclude="media*" -C /data . 2> /dev/null'), stdout=sp.PIPE)
             fn = 'data.ext4.win'
         elif partname=='system':
             sp.check_call(('adb','shell','mount -r /system'), stdout=sp.DEVNULL)
-            child = sp.Popen(('adb','shell','tar -cpz -C /system . | nc -l -p%d -w3'%port), stdout=sp.DEVNULL)
+            child = sp.Popen(('adb','shell','stty -onlcr && tar -cpz -C /system . 2> /dev/null'), stdout=sp.PIPE)
             fn = 'system.ext4.win'
 
-        time.sleep(1)
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect(('localhost', port))
         pbwidgets = ['  %s: ' % fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed()]
         pbar = ProgressBar(maxval=size*512, widgets=pbwidgets).start()
 
         with open(fn, 'wb') as out:
-            for block in iter(lambda: s.recv(65536), b''):
+            for block in iter(lambda: child.stdout.read(65536), b''):
                 out.write(block)
                 pbar.update(out.tell())
             else:
-                s.close()
                 pbar.maxval = out.tell() or pbar.maxval # need to adjust for the smaller compressed size
                 pbar.finish()
 
         child.terminate()
-        sp.check_call(('adb','forward','--remove','tcp:%d'%port))

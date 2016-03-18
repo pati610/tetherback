@@ -42,25 +42,17 @@ for partname, devname, partn, size in partmap:
         print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
         sp.check_call(('adb','shell','umount /dev/block/%s'%devname), stdout=sp.DEVNULL)
 
-
-        port = 5500+partn
-        sp.check_call(('adb','forward','tcp:%d'%port, 'tcp:%d'%port))
-        child = sp.Popen(('adb','shell','dd if=/dev/block/%s | gzip | nc -l -p%d -w3'%(devname,port)), stdout=sp.DEVNULL)
-        time.sleep(1)
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect(('localhost', port))
+        child = sp.Popen(('adb','shell','stty -onlcr && dd if=/dev/block/%s 2>/dev/null | gzip -f'%devname), stdout=sp.PIPE)
 
         pbwidgets = ['  %s: ' % devname, Percentage(), ' ', ETA(), ' ', FileTransferSpeed()]
         pbar = ProgressBar(maxval=size*512, widgets=pbwidgets).start()
 
         with open('%s.img.gz' % partname, 'wb') as out:
-            for block in iter(lambda: s.recv(65536), b''):
+            for block in iter(lambda: child.stdout.read(65536), b''):
                 out.write(block)
                 pbar.update(out.tell())
             else:
-                s.close()
                 pbar.maxval = out.tell() or pbar.maxval # need to adjust for the smaller compressed size
                 pbar.finish()
 
         child.terminate()
-        sp.check_call(('adb','forward','--remove','tcp:%d'%port))
