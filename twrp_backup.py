@@ -38,21 +38,24 @@ os.mkdir(backupdir)
 os.chdir(backupdir)
 print("Saving TWRP backup images in %s/ ..." % backupdir, file=stderr)
 
-for partname, devname, partn, size in partmap:
-    if partname in ('boot','system','userdata'):
-        print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
+handler = dict(
+    boot = ('boot.emmc.win', None, None),
+    data = ('data.ext4.win', '/data', '-p --exclude="media*"'),
+    system = ('system.ext4.win', '/system', '-p')
+)
 
-        if partname=='boot':
+for partname, devname, partn, size in partmap:
+    if partname in handler:
+        fn, mount, taropts = handler[partname]
+
+        if mount:
+            print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (devname, mount, size/2048))
+            sp.check_call(('adb','shell','mount -r %s'%mount), stdout=sp.DEVNULL)
+            child = sp.Popen(('adb','shell','stty -onlcr && tar -cz -C %s %s . 2> /dev/null' % (mount, taropts or '')), stdout=sp.PIPE)
+        else:
+            print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
+            sp.check_call(('adb','shell','umount /dev/block/%s'%devname), stdout=sp.DEVNULL)
             child = sp.Popen(('adb','shell','stty -onlcr && dd if=/dev/block/%s 2>/dev/null | gzip -f'%devname), stdout=sp.PIPE)
-            fn = 'boot.emmc.win'
-        elif partname=='userdata':
-            sp.check_call(('adb','shell','mount -r /data'), stdout=sp.DEVNULL)
-            child = sp.Popen(('adb','shell','stty -onlcr && tar -cpz --exclude="media*" -C /data . 2> /dev/null'), stdout=sp.PIPE)
-            fn = 'data.ext4.win'
-        elif partname=='system':
-            sp.check_call(('adb','shell','mount -r /system'), stdout=sp.DEVNULL)
-            child = sp.Popen(('adb','shell','stty -onlcr && tar -cpz -C /system . 2> /dev/null'), stdout=sp.PIPE)
-            fn = 'system.ext4.win'
 
         pbwidgets = ['  %s: ' % fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed()]
         pbar = ProgressBar(maxval=size*512, widgets=pbwidgets).start()
