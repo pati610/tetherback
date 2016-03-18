@@ -91,6 +91,23 @@ created a shell script to do a TWRP-style backup over USB
 ([Gist](https://gist.github.com/inhies/5069663)) and decided to try to
 put together a more polished version of this.
 
+## Bugs
+
+One of the very annoying issues with `adb` is that
+[`adb shell` is not 8-bit-clean](http://stackoverflow.com/questions/13578416):
+line endings in the input and output get mangled, so it cannot easily
+be used to pipe binary data to and from the device.
+
+The common workaround for this is to use TCP forwarding and `netcat`
+(see
+[this answer on StackOverflow](http://stackoverflow.com/a/34216105/20789)),
+but this is quite cumbersome in my opinion.
+
+There is a better way to make the output pipe 8-bit-clean, by changing
+the terminal settings
+([another StackOverflow answer](http://stackoverflow.com/a/20141481/20789)),
+though apparently it does not work with Windows builds of `adb`.
+
 ## License
 
 GPL v3 or newer
