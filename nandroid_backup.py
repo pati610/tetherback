@@ -32,10 +32,10 @@ else:
     pbar.finish()
 
 # backup partitions
-backupdir = "partition-backup-%s" % datetime.datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
+backupdir = "nandroid-backup-%s" % datetime.datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
 os.mkdir(backupdir)
 os.chdir(backupdir)
-print("Saving partition images in %s/ ..." % backupdir, file=stderr)
+print("Saving nandroid partition images in %s/ ..." % backupdir, file=stderr)
 
 for partname, devname, partn, size in partmap:
     if partname in ('boot','system','userdata'):
