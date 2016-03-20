@@ -4,10 +4,20 @@
 #
 # Currently backs up /data, /system, and /boot partitions
 
+from __future__ import print_function
+
 import subprocess as sp
-import os, sys, datetime, socket, time
+import os, sys, datetime, socket, time, argparse
 from sys import stderr
 from progressbar import ProgressBar, Percentage, ETA, FileTransferSpeed, Bar
+
+p = argparse.ArgumentParser()
+p.add_argument('-v', '--verbose', action='count')
+p.add_argument('-x', '--extra', action='append', dest='extra', default=[], help="Include extra partition (by partition map name)")
+args = p.parse_args()
+
+backup_partitions = {'boot':'boot', 'system':'/system', 'userdata':'/data'}
+backup_partitions.update({x:'(extra)' for x in args.extra})
 
 # check that device is booted into TWRP
 kver = sp.check_output(('adb','shell','uname -r')).strip().decode()
@@ -31,6 +41,11 @@ for ii in range(1, nparts+1):
 else:
     pbar.finish()
 
+if args.verbose > 0:
+    print("\tNAME\tDEVICE\tSIZE(MiB)\tBACKUP?", file=stderr)
+    for partname, devname, partn, size in partmap:
+        print("%d:\t%s\t%s\t%d\t\t%s" % (partn, partname, devname, size/2048, backup_partitions.get(partname, "(skip)")))
+
 # backup partitions
 backupdir = "nandroid-backup-%s" % datetime.datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
 os.mkdir(backupdir)
@@ -38,11 +53,12 @@ os.chdir(backupdir)
 print("Saving nandroid partition images in %s/ ..." % backupdir, file=stderr)
 
 for partname, devname, partn, size in partmap:
-    if partname in ('boot','system','userdata'):
-        print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
+    if partname in backup_partitions:
+        description = backup_partitions[partname]
+        print("Saving %s partition image (partition name %s, device name %s), %d MiB uncompressed..." % (description, partname, devname, size/2048))
         sp.check_call(('adb','shell','umount /dev/block/%s'%devname), stdout=sp.DEVNULL)
 
-        fn = '%s.img.gz' % partname
+        fn = '%s.%s.img.gz' % (partname, devname)
         child = sp.Popen(('adb','shell','stty -onlcr && dd if=/dev/block/%s 2>/dev/null | gzip -f'%devname), stdout=sp.PIPE)
 
         pbwidgets = ['  %s: ' % fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed()]
