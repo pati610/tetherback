@@ -10,8 +10,8 @@ without using the device's internal storage or SD card.
 
 ## Requirements
 
-* Python 3.3+ under Linux
-  * `progressbar` package is needed (`pip install progressbar` should do it)
+* Python 3.3+
+  * `progressbar2` and `tabulate` packages are needed (`pip install progressbar2 tabulate` should do it)
 * You must have [TWRP recovery](https://twrp.me/) installed on your rooted Android device
 * [`adb`](https://en.wikipedia.org/wiki/Android_software_development#ADB) (Android Debug Bridge) command-line tools
 
@@ -31,11 +31,11 @@ List of devices attached
   and `data.ext4.win`:
 
     ```bash
-    $ ./twrp_backup.py
+    $ ./tetherback.py
     Device reports TWRP kernel (3.4.0-bricked-hammerhead-twrp-g7b77eb4).
     Reading partition map for mmcblk0 (29 partitions)...
       partition map: 100% Time: 0:00:03
-    Saving TWRP backup images in twrp-backup-2016-03-17--17-44-04/ ...
+    Saving backup images in twrp-backup-2016-03-17--17-44-04/ ...
     Saving partition boot (mmcblk0p19), 22 MiB uncompressed...
       boot.emmc.win: 100% Time: 0:00:05   3.04 MB/s
     Saving tarball of mmcblk0p25 (mounted at /system), 1024 MiB uncompressed...
@@ -49,11 +49,11 @@ List of devices attached
   `<label>.img.gz`):
 
     ```bash
-    $ ./nandroid_backup.py
+    $ ./tetherback.py -n
     Device reports TWRP kernel (3.4.0-bricked-hammerhead-twrp-g7b77eb4).
     Reading partition map for mmcblk0 (29 partitions)...
       partition map: 100% Time: 0:00:03
-    Saving nandroid partition images in nandroid-backup-2016-03-17--18-15-03/ ...
+    Saving backup images in nandroid-backup-2016-03-17--18-15-03/ ...
     Saving partition boot (mmcblk0p19), 22 MiB uncompressed...
       mmcblk0p19: 100% Time: 0:00:05   3.07 MB/s
     Saving partition system (mmcblk0p25), 1024 MiB uncompressed...
