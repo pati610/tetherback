@@ -13,7 +13,8 @@ from tabulate import tabulate
 
 p = argparse.ArgumentParser()
 p.add_argument('-v', '--verbose', action='count', default=0)
-p.add_argument('-t','--tcp', action='store_true', help="Transfer files using TCP forwarding rather than pipe (use this option if backup files are corrupt)")
+p.add_argument('-t', '--tcp', action='store_false', dest='pipe', help="Transfer files using ADB TCP forwarding (the default, should work with any host OS)")
+p.add_argument('--pipe', action='store_true', help="Transfer files using pipe rather than TCP forwarding (warning: may corrupt data, only known to work on Linux)")
 g = p.add_argument_group('Backup contents')
 g.add_argument('-n', '--nandroid', action='store_true', help="Make nandroid backup; raw images rather than tarballs for /system and /data partitions (default is TWRP backup)")
 g.add_argument('-x', '--extra', action='append', dest='extra', default=[], help="Include extra partition as raw image (by partition map name)")
@@ -94,7 +95,11 @@ for partname, devname, partn, size in partmap:
             sp.check_call(('adb','shell','umount /dev/block/%s'%devname), stdout=sp.DEVNULL)
             cmdline = 'dd if=/dev/block/%s 2> /dev/null | gzip -f' % devname
 
-        if args.tcp:
+        if args.pipe:
+            # need stty -onlcr to make adb-shell an 8-bit-clean pipe: http://stackoverflow.com/a/20141481/20789
+            child = sp.Popen(('adb','shell','stty -onlcr && '+cmdline), stdout=sp.PIPE)
+            block_iter = iter(lambda: child.stdout.read(65536), b'')
+        else:
             port = 5600+partn
             sp.check_call(('adb','forward','tcp:%d'%port, 'tcp:%d'%port))
             child = sp.Popen(('adb','shell',cmdline + '| nc -l -p%d -w3'%port), stdout=sp.PIPE)
@@ -103,10 +108,6 @@ for partname, devname, partn, size in partmap:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect(('localhost', port))
             block_iter = iter(lambda: s.recv(65536), b'')
-        else:
-            # need stty -onlcr to make adb-shell an 8-bit-clean pipe: http://stackoverflow.com/a/20141481/20789
-            child = sp.Popen(('adb','shell','stty -onlcr && '+cmdline), stdout=sp.PIPE)
-            block_iter = iter(lambda: child.stdout.read(65536), b'')
 
         pbwidgets = ['  %s: ' % fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed()]
         pbar = ProgressBar(maxval=size*512, widgets=pbwidgets).start()
@@ -119,7 +120,7 @@ for partname, devname, partn, size in partmap:
                 pbar.maxval = out.tell() or pbar.maxval # need to adjust for the smaller compressed size
                 pbar.finish()
 
-        if args.tcp:
+        if not args.pipe:
             s.close()
             sp.check_call(('adb','forward','--remove','tcp:%d'%port))
         child.terminate()
