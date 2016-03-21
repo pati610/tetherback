@@ -40,7 +40,7 @@ print("Saving TWRP backup images in %s/ ..." % backupdir, file=stderr)
 
 handler = dict(
     boot = ('boot.emmc.win', None, None),
-    data = ('data.ext4.win', '/data', '-p --exclude="media*"'),
+    userdata = ('data.ext4.win', '/data', '-p --exclude="media*"'),
     system = ('system.ext4.win', '/system', '-p')
 )
 
