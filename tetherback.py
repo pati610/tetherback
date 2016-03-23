@@ -104,6 +104,7 @@ for partname, devname, partn, size in partmap:
             sp.check_call(('adb','forward','tcp:%d'%port, 'tcp:%d'%port))
             child = sp.Popen(('adb','shell',cmdline + '| nc -l -p%d -w3'%port), stdout=sp.PIPE)
 
+            # FIXME: need a better way to check that socket is ready to transmit
             time.sleep(1)
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             s.connect(('localhost', port))
@@ -122,5 +123,11 @@ for partname, devname, partn, size in partmap:
 
         if not args.pipe:
             s.close()
-            sp.check_call(('adb','forward','--remove','tcp:%d'%port))
+            # try to remove port forwarding
+            for retry in range(3):
+                if sp.call(('adb','forward','--remove','tcp:%d'%port))==0:
+                    break
+                time.sleep(1)
+            else:
+                raise RuntimeError('could not remove adb TCP forwarding (port %d)' % port)
         child.terminate()
