@@ -88,10 +88,12 @@ for partname, devname, partn, size in partmap:
 
         if mount:
             print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (devname, mount, size/2048))
+            # FIXME: should do a more careful check to verify that the partition has been mounted
             sp.check_call(('adb','shell','mount -r %s'%mount), stdout=sp.DEVNULL)
             cmdline = 'tar -cz -C %s %s . 2> /dev/null' % (mount, taropts or '')
         else:
             print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
+            # FIXME: should do a more careful check to verify that the partition has been unmounted
             sp.check_call(('adb','shell','umount /dev/block/%s'%devname), stdout=sp.DEVNULL)
             cmdline = 'dd if=/dev/block/%s 2> /dev/null | gzip -f' % devname
 
@@ -100,6 +102,7 @@ for partname, devname, partn, size in partmap:
             child = sp.Popen(('adb','shell','stty -onlcr && '+cmdline), stdout=sp.PIPE)
             block_iter = iter(lambda: child.stdout.read(65536), b'')
         else:
+            # FIXME: try ports until one works
             port = 5600+partn
             sp.check_call(('adb','forward','tcp:%d'%port, 'tcp:%d'%port))
             child = sp.Popen(('adb','shell',cmdline + '| nc -l -p%d -w3'%port), stdout=sp.PIPE)
