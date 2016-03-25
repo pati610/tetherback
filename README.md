@@ -62,11 +62,17 @@ List of devices attached
       mmcblk0p28: 100% Time: 0:40:04   1.80 MB/s
     ```
 
+### Additional options
+
 * Extra partitions can be included (as raw images) with the `-x`/`--extra`
   option; for example, `-x modemst1 -x modemst2` to backup the
   [Nexus 5 EFS partitions](http://forum.xda-developers.com/google-nexus-5/development/modem-nexus-5-flashable-modems-efs-t2514095).
 
-* The partition map and backup options will be printed with `-v`/`--verbose` (or use `-0`/`--dry-run` to **only** print it, and skip the actual backup), e.g.:
+* The partition map and backup plan will be printed with
+  `-v`/`--verbose` (or use `-0`/`--dry-run` to **only** print it, and
+  skip the actual backup). For example, the following partition map
+  and backup plan will be shown for a Nexus 5 with the standard
+  partition layout:
 
     ```
     BLOCK DEVICE    NAME        SIZE (KiB)  FILENAME         FORMAT
@@ -86,7 +92,8 @@ List of devices attached
     ```
     -M, --media           Include /data/media* in TWRP backup
     -D, --data-cache      Include /data/*-cache in TWRP backup
-    -C, --no-cache        Include /cache partition in backup
+    -R, --recovery        Include recovery partition in backup
+    -C, --cache           Include /cache partition in backup
     -U, --no-userdata     Omit /data partition from backup
     -S, --no-system       Omit /system partition from backup
     -B, --no-boot         Omit boot partition from backup
@@ -121,22 +128,33 @@ created a shell script to do a TWRP-style backup over USB
 ([Gist](https://gist.github.com/inhies/5069663)) and decided to try to
 put together a more polished version of this.
 
-## Bugs
+## Issues
 
 One of the very annoying issues with `adb` is that
 [`adb shell` is not 8-bit-clean](http://stackoverflow.com/questions/13578416):
 line endings in the input and output get mangled, so it cannot easily
-be used to pipe binary data to and from the device.
-
-The common workaround for this is to use TCP forwarding and `netcat`
-(see
+be used to pipe binary data to and from the device. The common
+workaround for this is to use TCP forwarding and `netcat` (see
 [this answer on StackOverflow](http://stackoverflow.com/a/34216105/20789)),
-but this is quite cumbersome in my opinion.
-
-There is a better way to make the output pipe 8-bit-clean, by changing
-the terminal settings
+but this is more cumbersome to code, and prone to strange timing
+issues. There is a better way to make the output pipe 8-bit-clean, by
+changing the terminal settings
 ([another StackOverflow answer](http://stackoverflow.com/a/20141481/20789)),
 though apparently it does not work with Windows builds of `adb`.
+
+TCP forwarding is used *by default*. If you have problems, please try
+`--base64` for a slow but reliable transfer method, and please
+[report any data corruption issues](http://github.com/dlenski/tetherback/issues). If
+your host OS is Linux, `--pipe` should be faster and more reliable.
+
+  ```
+  -t, --tcp             ADB TCP forwarding (fast, should work with any host
+                        OS, but prone to timing problems)
+  -6, --base64          Base64 pipe (very slow, should work with any host OS)
+  -P, --pipe            Binary pipe (fast, but will PROBABLY CORRUPT DATA on
+                        non-Linux host)
+  ```
+
 
 ## License
 

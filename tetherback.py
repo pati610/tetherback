@@ -15,19 +15,20 @@ from enum import Enum
 
 adbxp = Enum('AdbTransport', 'tcp pipe_b64 pipe_bin')
 
-p = argparse.ArgumentParser()
-p.add_argument('-s', dest='specific', default=None, help="Specific device ID (shown by adb devices). Default is sole USB-connected device.")
+p = argparse.ArgumentParser(description='''Tool to create TWRP and nandroid-style backups of an Android device running TWRP recovery, using adb-over-USB, without touching the device's internal storage or SD card.''')
+p.add_argument('-s', dest='specific', metavar='DEVICE_ID', default=None, help="Specific device ID (shown by adb devices). Default is sole USB-connected device.")
 p.add_argument('-N', '--nandroid', action='store_true', help="Make nandroid backup; raw images rather than tarballs for /system and /data partitions (default is TWRP backup)")
-p.add_argument('-0', '--dry-run', action='store_true', help="Just show the partition map, and what would be backed up, then exit.")
+p.add_argument('-0', '--dry-run', action='store_true', help="Just show the partition map and backup plan, then exit.")
 p.add_argument('-v', '--verbose', action='count', default=0)
-g = p.add_argument_group('Data transfer methods')
+g = p.add_argument_group('Data transfer methods',
+                         description="The default is to use TCP forwarding. If you have problems, please try --base64 for a slow but reliable transfer method (and report issues at http://github.com/dlenski/tetherback/issues)")
 x = g.add_mutually_exclusive_group()
 x.add_argument('-t','--tcp', dest='transport', action='store_const', const=adbxp.tcp, default=adbxp.tcp,
-               help="Transfer data using ADB TCP forwarding (fast, should work with any host OS, but prone to timing problems)")
+               help="ADB TCP forwarding (fast, should work with any host OS, but prone to timing problems)")
 x.add_argument('-6','--base64', dest='transport', action='store_const', const=adbxp.pipe_b64,
-               help="Transfer data using base64 pipe (very slow, should work with any host OS)")
+               help="Base64 pipe (very slow, should work with any host OS)")
 x.add_argument('-P','--pipe', dest='transport', action='store_const', const=adbxp.pipe_bin,
-               help="Transfer data using 8-bit clean pipe (fast, but will PROBABLY CORRUPT DATA except on Linux host)")
+               help="Binary pipe (fast, but will PROBABLY CORRUPT DATA on non-Linux host)")
 g = p.add_argument_group('Backup contents')
 g.add_argument('-M', '--media', action='store_true', default=False, help="Include /data/media* in TWRP backup")
 g.add_argument('-D', '--data-cache', action='store_true', default=False, help="Include /data/*-cache in TWRP backup")
@@ -36,7 +37,7 @@ g.add_argument('-C', '--no-cache', dest='cache', action='store_true', default=Fa
 g.add_argument('-U', '--no-userdata', dest='userdata', action='store_false', default=True, help="Omit /data partition from backup")
 g.add_argument('-S', '--no-system', dest='system', action='store_false', default=True, help="Omit /system partition from backup")
 g.add_argument('-B', '--no-boot', dest='boot', action='store_false', default=True, help="Omit boot partition from backup")
-g.add_argument('-x', '--extra', action='append', dest='extra', default=[], help="Include extra partition as raw image (by partition map name)")
+g.add_argument('-x', '--extra', action='append', dest='extra', metavar='NAME', default=[], help="Include extra partition as raw image")
 args = p.parse_args()
 
 if args.specific:
@@ -72,8 +73,7 @@ def backup_how(devname, bp):
 # check that device is booted into TWRP
 kver = sp.check_output(adbcmd+('shell','uname -r')).strip().decode()
 if '-twrp-' not in kver:
-    print("ERROR: Device reports non-TWRP kernel (%s); please boot into TWRP recovery and retry." % kver, file=stderr)
-    sys.exit(1)
+    p.error("device reports non-TWRP kernel (%s)\n\tplease boot into TWRP recovery and retry." % kver)
 else:
     print("Device reports TWRP kernel (%s)." % kver, file=stderr)
 
