@@ -17,7 +17,8 @@ adbxp = Enum('AdbTransport', 'tcp pipe_b64 pipe_bin')
 
 p = argparse.ArgumentParser()
 p.add_argument('-s', dest='specific', default=None, help="Specific device ID (shown by adb devices). Default is sole USB-connected device.")
-p.add_argument('-n', '--nandroid', action='store_true', help="Make nandroid backup; raw images rather than tarballs for /system and /data partitions (default is TWRP backup)")
+p.add_argument('-N', '--nandroid', action='store_true', help="Make nandroid backup; raw images rather than tarballs for /system and /data partitions (default is TWRP backup)")
+p.add_argument('-0', '--dry-run', action='store_true', help="Just show the partition map, and what would be backed up, then exit.")
 p.add_argument('-v', '--verbose', action='count', default=0)
 g = p.add_argument_group('Data transfer methods')
 x = g.add_mutually_exclusive_group()
@@ -58,15 +59,15 @@ else:
         if not args.data_cache: data_omit.append("*-cache")
         backup_partitions['userdata'] = ('data.ext4.win', '/data', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
 
-def backup_how(x):
-    if x is None:
-        return "(skip)"
+def backup_how(devname, bp):
+    if devname not in bp:
+        return [None, None]
     else:
-        fn, mount, taropts = x
+        fn, mount, taropts = bp[devname]
         if mount:
-            return "%s (tarball of %s)" % (fn, mount)
+            return [fn, "tar -czC %s %s" % (mount, taropts)]
         else:
-            return "%s (raw image)" % fn
+            return [fn, "gzipped raw image"]
 
 # check that device is booted into TWRP
 kver = sp.check_output(adbcmd+('shell','uname -r')).strip().decode()
@@ -90,13 +91,15 @@ for ii in range(1, nparts+1):
 else:
     pbar.finish()
 
-if args.verbose > 0:
-    print(tabulate(  [[ '','NAME','DEVICE','SIZE (KiB)','BACKUP?' ]]
-                   + [[ partn, partname, devname, size//2, backup_how(backup_partitions.get(partname)) ]
-                   for partname, devname, partn, size in partmap] ))
-    #print("\tNAME\tDEVICE\tSIZE(MiB)\tBACKUP?", file=stderr)
-    #for partname, devname, partn, size in partmap:
-    #    print("%d:\t%s\t%s\t%d\t\t%s" % (partn, partname, devname, size/2048, backup_partitions.get(partname, "(skip)")))
+if args.dry_run or args.verbose > 0:
+    print()
+    print(tabulate( [[ devname, partname, size//2] + backup_how(partname, backup_partitions)
+                     for partname, devname, partn, size in partmap],
+                    [ 'BLOCK DEVICE','NAME','SIZE (KiB)','FILENAME','FORMAT' ] ))
+    print()
+
+if args.dry_run:
+    p.exit()
 
 # backup partitions
 backupdir = ("nandroid-backup-" if args.nandroid else "twrp-backup-") + datetime.datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
@@ -112,7 +115,7 @@ for partname, devname, partn, size in partmap:
             print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (devname, mount, size/2048))
             # FIXME: should do a more careful check to verify that the partition has been mounted
             sp.check_call(adbcmd+('shell','mount -r %s'%mount), stdout=sp.DEVNULL)
-            cmdline = 'tar -cz -C %s %s . 2> /dev/null' % (mount, taropts or '')
+            cmdline = 'tar -czC %s %s . 2> /dev/null' % (mount, taropts or '')
         else:
             print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
             # FIXME: should do a more careful check to verify that the partition has been unmounted
