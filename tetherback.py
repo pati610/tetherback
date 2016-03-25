@@ -68,6 +68,8 @@ else:
         if not args.data_cache: data_omit.append("*-cache")
         backup_partitions['userdata'] = ('data.ext4.win', '/data', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
 
+########################################
+
 def backup_how(devname, bp):
     if devname not in bp:
         return [None, None]
@@ -77,6 +79,41 @@ def backup_how(devname, bp):
             return [fn, "tar -czC %s %s" % (mount, taropts)]
         else:
             return [fn, "gzipped raw image"]
+
+def really_mount(dev, node, mode='ro'):
+    for opts in (mode, 'remount,'+mode):
+        if sp.check_output(adbcmd+('shell','mount -o %s %s %s 2>/dev/null && echo ok' % (opts, dev, node))).strip():
+            break
+    for l in sp.check_output(adbcmd+('shell','mount')).splitlines():
+        f = l.decode().split()
+        mdev, mnode, mtype = (f[0], f[2], f[4]) if (f[1], f[3])==('on','type') else (f[0], f[1], f[2])
+        if mdev==dev or mnode==node:
+            return mtype
+
+def really_umount(dev, node):
+    for opts in ('','-f','-l','-r'):
+        if sp.check_output(adbcmd+('shell','umount %s 2>/dev/null && echo ok' % dev)).strip():
+            break
+        if sp.check_output(adbcmd+('shell','umount %s 2>/dev/null && echo ok' % node)).strip():
+            break
+    for l in sp.check_output(adbcmd+('shell','mount')).splitlines():
+        f = l.decode().split()
+        mdev, mnode = (f[0], f[2]) if (f[1], f[3])==('on','type') else (f[0], f[1])
+        if mdev==dev or mnode==node:
+            return False
+    return True
+
+def really_forward(port1, port2):
+    for port in range(port1, port2):
+        if sp.call(adbcmd+('forward','tcp:%d'%port,'tcp:%d'%port))==0:
+            return port
+        time.sleep(1)
+
+def really_unforward(port, tries=3):
+    for retry in range(tries):
+        if sp.call(adbcmd+('forward','--remove','tcp:%d'%port))==0:
+            return retry+1
+        time.sleep(1)
 
 # check that device is booted into TWRP
 kver = sp.check_output(adbcmd+('shell','uname -r')).strip().decode()
@@ -121,13 +158,16 @@ for partname, devname, partn, size in partmap:
 
         if mount:
             print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (devname, mount, size/2048))
-            # FIXME: should do a more careful check to verify that the partition has been mounted
-            sp.check_call(adbcmd+('shell','mount -r %s'%mount), stdout=sp.DEVNULL)
+            fstype = really_mount('/dev/block/'+devname, mount)
+            if not fstype:
+                raise RuntimeError('%s: could not mount %s' % (partname, mount))
+            elif fstype != 'ext4':
+                raise RuntimeError('%s: expected ext4 filesystem, but found %s' % (partname, fstype))
             cmdline = 'tar -czC %s %s . 2> /dev/null' % (mount, taropts or '')
         else:
             print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
-            # FIXME: should do a more careful check to verify that the partition has been unmounted
-            sp.check_call(adbcmd+('shell','umount /dev/block/%s'%devname), stdout=sp.DEVNULL)
+            if not really_umount('/dev/block/'+devname, mount):
+                raise RuntimeError('%s: could not unmount %s' % (partname, mount))
             cmdline = 'dd if=/dev/block/%s 2> /dev/null | gzip -f' % devname
 
         if args.transport == adbxp.pipe_bin:
@@ -139,9 +179,9 @@ for partname, devname, partn, size in partmap:
             child = sp.Popen(adbcmd+('shell',cmdline+'| base64'), stdout=sp.PIPE)
             block_iter = iter(lambda: b64dec(b''.join(child.stdout.readlines(65536))), b'')
         else:
-            # FIXME: try ports until one works
-            port = 5600+partn
-            sp.check_call(adbcmd+('forward','tcp:%d'%port, 'tcp:%d'%port))
+            port = really_forward(5600+partn, 5700+partn)
+            if not port:
+                raise RuntimeError('%s: could not ADB-forward a TCP port')
             child = sp.Popen(adbcmd+('shell',cmdline + '| nc -l -p%d -w3'%port), stdout=sp.PIPE)
 
             # FIXME: need a better way to check that socket is ready to transmit
@@ -163,11 +203,6 @@ for partname, devname, partn, size in partmap:
 
         if args.transport==adbxp.tcp:
             s.close()
-            # try to remove port forwarding
-            for retry in range(3):
-                if sp.call(adbcmd+('forward','--remove','tcp:%d'%port))==0:
-                    break
-                time.sleep(1)
-            else:
-                raise RuntimeError('could not remove adb TCP forwarding (port %d)' % port)
+            if not really_unforward(port):
+                raise RuntimeError('could not remove ADB-forward for TCP port %d' % port)
         child.terminate()
