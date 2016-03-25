@@ -62,6 +62,21 @@ List of devices attached
       mmcblk0p28: 100% Time: 0:40:04   1.80 MB/s
     ```
 
+* Extra partitions can be included (as raw images) with the `-x`
+  option; for example, `-x modemst1 -x modemst2` to backup the
+  [Nexus 5 EFS partitions](http://forum.xda-developers.com/google-nexus-5/development/modem-nexus-5-flashable-modems-efs-t2514095).
+
+* Additional options allow exclusion or inclusion of standard partitions:
+
+    ```
+    -M, --media           Include /data/media* in TWRP backup
+    -D, --data-cache      Include /data/*-cache in TWRP backup
+    -C, --no-cache        Include /cache partition in backup
+    -U, --no-userdata     Omit /data partition from backup
+    -S, --no-system       Omit /system partition from backup
+    -B, --no-boot         Omit boot partition from backup
+    ```
+
 ## Motivation
 
 I've been frustrated by the fact that all the Android recovery backup
