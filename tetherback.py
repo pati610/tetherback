@@ -40,6 +40,14 @@ g.add_argument('-B', '--no-boot', dest='boot', action='store_false', default=Tru
 g.add_argument('-x', '--extra', action='append', dest='extra', metavar='NAME', default=[], help="Include extra partition as raw image")
 args = p.parse_args()
 
+try:
+    adbversions = sp.check_output(('adb','version')).strip().decode().split()[-1]
+except Exception:
+    p.error("could not determine ADB version -- is the adb binary in your PATH?\n\thttp://developer.android.com/tools/help/adb.html")
+adbversion = tuple(int(x) for x in adbversions.split('.'))
+if adbversion<(1,0,31):
+    p.error("found ADB version %s, but version >= 1.0.31 is required" % adbversions)
+
 if args.specific:
     adbcmd = ('adb','-s',args.specific)
 else:
