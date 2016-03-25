@@ -62,9 +62,24 @@ List of devices attached
       mmcblk0p28: 100% Time: 0:40:04   1.80 MB/s
     ```
 
-* Extra partitions can be included (as raw images) with the `-x`
+* Extra partitions can be included (as raw images) with the `-x`/`--extra`
   option; for example, `-x modemst1 -x modemst2` to backup the
   [Nexus 5 EFS partitions](http://forum.xda-developers.com/google-nexus-5/development/modem-nexus-5-flashable-modems-efs-t2514095).
+
+* The partition map and backup options will be printed with `-v`/`--verbose` (or use `-0`/`--dry-run` to **only** print it, and skip the actual backup), e.g.:
+
+    ```
+    BLOCK DEVICE    NAME        SIZE (KiB)  FILENAME         FORMAT
+    --------------  --------  ------------  ---------------  --------------------------------------------------------
+    mmcblk0p1       modem            65536
+    ...
+    mmcblk0p19      boot             22528  boot.emmc.win    gzipped raw image
+    ...
+    mmcblk0p25      system         1048576  system.ext4.win  tar -czC /system -p
+    ...
+    mmcblk0p28      userdata      13404138  data.ext4.win    tar -czC /data -p --exclude="media*" --exclude="*-cache"
+    mmcblk0p29      grow                 5
+    ```
 
 * Additional options allow exclusion or inclusion of standard partitions:
 
