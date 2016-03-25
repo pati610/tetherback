@@ -17,17 +17,26 @@ adbxp = Enum('AdbTransport', 'tcp pipe_b64 pipe_bin')
 
 p = argparse.ArgumentParser()
 p.add_argument('-s', dest='specific', default=None, help="Specific device ID (shown by adb devices). Default is sole USB-connected device.")
+p.add_argument('-n', '--nandroid', action='store_true', help="Make nandroid backup; raw images rather than tarballs for /system and /data partitions (default is TWRP backup)")
 p.add_argument('-v', '--verbose', action='count', default=0)
-p.add_argument('-X', '--transfer-method', dest='transport', choices=[x.name for x in adbxp], default='tcp',
-               help='''Data transfer method (default is %(default)s):
-                       - tcp: transfer data using ADB TCP forwarding (should not corrupt data, but prone to timing problems)
-                       - base64: transfer data using base64 pipe (slow but reliable, should work with any host OS)
-                       - pipe: transfer data using 8-bit clean pipe (fast, but will PROBABLY CORRUPT DATA except on Linux host)''')
+g = p.add_argument_group('Data transfer methods')
+x = g.add_mutually_exclusive_group()
+x.add_argument('-t','--tcp', dest='transport', action='store_const', const=adbxp.tcp, default=adbxp.tcp,
+               help="Transfer data using ADB TCP forwarding (fast, should work with any host OS, but prone to timing problems)")
+x.add_argument('-6','--base64', dest='transport', action='store_const', const=adbxp.pipe_b64,
+               help="Transfer data using base64 pipe (very slow, should work with any host OS)")
+x.add_argument('-P','--pipe', dest='transport', action='store_const', const=adbxp.pipe_bin,
+               help="Transfer data using 8-bit clean pipe (fast, but will PROBABLY CORRUPT DATA except on Linux host)")
 g = p.add_argument_group('Backup contents')
-g.add_argument('-n', '--nandroid', action='store_true', help="Make nandroid backup; raw images rather than tarballs for /system and /data partitions (default is TWRP backup)")
+g.add_argument('-M', '--media', action='store_true', default=False, help="Include /data/media* in TWRP backup")
+g.add_argument('-D', '--data-cache', action='store_true', default=False, help="Include /data/*-cache in TWRP backup")
+g.add_argument('-R', '--recovery', action='store_true', default=False, help="Include recovery partition in backup")
+g.add_argument('-C', '--no-cache', dest='cache', action='store_true', default=False, help="Include /cache partition in backup")
+g.add_argument('-U', '--no-userdata', dest='userdata', action='store_false', default=True, help="Omit /data partition from backup")
+g.add_argument('-S', '--no-system', dest='system', action='store_false', default=True, help="Omit /system partition from backup")
+g.add_argument('-B', '--no-boot', dest='boot', action='store_false', default=True, help="Omit boot partition from backup")
 g.add_argument('-x', '--extra', action='append', dest='extra', default=[], help="Include extra partition as raw image (by partition map name)")
 args = p.parse_args()
-args.transport = adbxp[args.transport]
 
 if args.specific:
     adbcmd = ('adb','-s',args.specific)
@@ -35,20 +44,19 @@ else:
     adbcmd = ('adb','-d')
 
 if args.nandroid:
-    backup_partitions = dict(
-        boot = ('boot.img.gz', None, None),
-        userdata = ('userdata.img.gz', None, None),
-        system = ('system.img.gz', None, None),
-        **{x:('%s.tar.gz'%x, None, None) for x in args.extra}
-    )
+    rp = args.extra + [x for x in ('boot','recovery','system','userdata','cache') if getattr(args, x)]
+    backup_partitions = {p: ('%s.tar.gz'%p, None, None) for p in rp}
 else:
-    backup_partitions = dict(
-        boot = ('boot.emmc.win', None, None),
-        userdata = ('data.ext4.win', '/data', '-p --exclude="media*"'),
-        system = ('system.ext4.win', '/system', '-p'),
-        **{x:('%s.img.win'%x, None, None) for x in args.extra}
-    )
-    backup_partitions.update()
+    rp = args.extra + [x for x in ('boot','recovery') if getattr(args, x)]
+    backup_partitions = {p: ('%s.emmc.win'%p, None, None) for p in rp}
+    mp = [x for x in ('cache','system') if getattr(args, x)]
+    backup_partitions.update(**{p: ('%s.ext4.win'%p, '/%s'%p, '-p') for p in mp})
+
+    if args.userdata:
+        data_omit = []
+        if not args.media: data_omit.append("media*")
+        if not args.data_cache: data_omit.append("*-cache")
+        backup_partitions['userdata'] = ('data.ext4.win', '/data', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
 
 def backup_how(x):
     if x is None:
