@@ -126,7 +126,7 @@ for partname, devname, partn, size in partmap:
         elif args.transport == adbxp.pipe_b64:
             # pipe output through base64: excruciatingly slow
             child = sp.Popen(adbcmd+('shell',cmdline+'| base64'), stdout=sp.PIPE)
-            block_iter = iter(lambda: b64dec(child.stdout.readline()), b'')
+            block_iter = iter(lambda: b64dec(b''.join(child.stdout.readlines(65536))), b'')
         else:
             # FIXME: try ports until one works
             port = 5600+partn
