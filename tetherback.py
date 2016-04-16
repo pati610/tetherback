@@ -116,7 +116,7 @@ def really_unforward(port, tries=3):
         time.sleep(1)
 
 # check that device is booted into TWRP
-kver = sp.check_output(adbcmd+('shell','uname -r')).strip().decode()
+kver = sp.check_output(adbcmd+('shell','uname -r')).strip().lower().decode()
 if '-twrp-' not in kver:
     p.error("device reports non-TWRP kernel (%s)\n\tplease boot into TWRP recovery and retry." % kver)
 else:
