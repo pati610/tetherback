@@ -17,6 +17,7 @@ adbxp = Enum('AdbTransport', 'tcp pipe_b64 pipe_bin')
 
 p = argparse.ArgumentParser(description='''Tool to create TWRP and nandroid-style backups of an Android device running TWRP recovery, using adb-over-USB, without touching the device's internal storage or SD card.''')
 p.add_argument('-s', dest='specific', metavar='DEVICE_ID', default=None, help="Specific device ID (shown by adb devices). Default is sole USB-connected device.")
+p.add_argument('-p', dest='outputpath', default=".", help="Set optional output path for backup files.")
 p.add_argument('-N', '--nandroid', action='store_true', help="Make nandroid backup; raw images rather than tarballs for /system and /data partitions (default is TWRP backup)")
 p.add_argument('-0', '--dry-run', action='store_true', help="Just show the partition map and backup plan, then exit.")
 p.add_argument('-v', '--verbose', action='count', default=0)
@@ -146,8 +147,13 @@ if args.dry_run or args.verbose > 0:
 if args.dry_run:
     p.exit()
 
+# check for optional backup path
+if not os.path.exists(args.outputpath):
+   print("Creating backup base dir %s" % args.outputpath, file=stderr)
+   os.mkdir(args.outputpath)
+
 # backup partitions
-backupdir = ("nandroid-backup-" if args.nandroid else "twrp-backup-") + datetime.datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
+backupdir = args.outputpath + "/" + ("nandroid-backup-" if args.nandroid else "twrp-backup-") + datetime.datetime.now().strftime('%Y-%m-%d--%H-%M-%S')
 os.mkdir(backupdir)
 os.chdir(backupdir)
 print("Saving backup images in %s/ ..." % backupdir, file=stderr)
