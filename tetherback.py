@@ -13,7 +13,7 @@ from progressbar import ProgressBar, Percentage, ETA, FileTransferSpeed, Bar
 from tabulate import tabulate
 from enum import Enum
 
-adbxp = Enum('AdbTransport', 'tcp pipe_b64 pipe_bin')
+adbxp = Enum('AdbTransport', 'tcp pipe_xo pipe_b64 pipe_bin')
 
 p = argparse.ArgumentParser(description='''Tool to create TWRP and nandroid-style backups of an Android device running TWRP recovery, using adb-over-USB, without touching the device's internal storage or SD card.''')
 p.add_argument('-s', dest='specific', metavar='DEVICE_ID', default=None, help="Specific device ID (shown by adb devices). Default is sole USB-connected device.")
@@ -26,10 +26,12 @@ g = p.add_argument_group('Data transfer methods',
 x = g.add_mutually_exclusive_group()
 x.add_argument('-t','--tcp', dest='transport', action='store_const', const=adbxp.tcp, default=adbxp.tcp,
                help="ADB TCP forwarding (fast, should work with any host OS, but prone to timing problems)")
+x.add_argument('-x','--exec-out', dest='transport', action='store_const', const=adbxp.pipe_xo,
+               help="ADB exec-out binary pipe (should work with any host OS, but only with newer versions of adb and TWRP)")
 x.add_argument('-6','--base64', dest='transport', action='store_const', const=adbxp.pipe_b64,
                help="Base64 pipe (very slow, should work with any host OS)")
 x.add_argument('-P','--pipe', dest='transport', action='store_const', const=adbxp.pipe_bin,
-               help="Binary pipe (fast, but will PROBABLY CORRUPT DATA on non-Linux host)")
+               help="ADB shell binary pipe (fast, but will PROBABLY CORRUPT DATA on non-Linux host)")
 g = p.add_argument_group('Backup contents')
 g.add_argument('-M', '--media', action='store_true', default=False, help="Include /data/media* in TWRP backup")
 g.add_argument('-D', '--data-cache', action='store_true', default=False, help="Include /data/*-cache in TWRP backup")
@@ -184,6 +186,14 @@ for partname, devname, partn, size in partmap:
             # pipe output through base64: excruciatingly slow
             child = sp.Popen(adbcmd+('shell',cmdline+'| base64'), stdout=sp.PIPE)
             block_iter = iter(lambda: b64dec(b''.join(child.stdout.readlines(65536))), b'')
+        elif args.transport == adbxp.pipe_xo:
+            # use adb exec-out, which is
+            # (a) only available with newer versions of adb on the host, and
+            # (b) only works with newer versions of TWRP (works with 2.8.0 for @kerlerm)
+            # https://plus.google.com/110558071969009568835/posts/Ar3FdhknHo3
+            # https://android.googlesource.com/platform/system/core/+/5d9d434efadf1c535c7fea634d5306e18c68ef1f/adb/commandline.c#1244
+            child = sp.Popen(adbcmd+('exec-out',cmdline), stdout=sp.PIPE)
+            block_iter = iter(lambda: child.stdout.read(65536), b'')
         else:
             port = really_forward(5600+partn, 5700+partn)
             if not port:
