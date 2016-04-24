@@ -40,7 +40,7 @@ g.add_argument('-C', '--no-cache', dest='cache', action='store_true', default=Fa
 g.add_argument('-U', '--no-userdata', dest='userdata', action='store_false', default=True, help="Omit /data partition from backup")
 g.add_argument('-S', '--no-system', dest='system', action='store_false', default=True, help="Omit /system partition from backup")
 g.add_argument('-B', '--no-boot', dest='boot', action='store_false', default=True, help="Omit boot partition from backup")
-g.add_argument('-x', '--extra', action='append', dest='extra', metavar='NAME', default=[], help="Include extra partition as raw image")
+g.add_argument('-X', '--extra', action='append', dest='extra', metavar='NAME', default=[], help="Include extra partition as raw image")
 args = p.parse_args()
 
 try:
