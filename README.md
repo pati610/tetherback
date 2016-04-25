@@ -64,8 +64,8 @@ List of devices attached
 
 ### Additional options
 
-* Extra partitions can be included (as raw images) with the `-x`/`--extra`
-  option; for example, `-x modemst1 -x modemst2` to backup the
+* Extra partitions can be included (as raw images) with the `-X`/`--extra`
+  option; for example, `-X modemst1 -X modemst2` to backup the
   [Nexus 5 EFS partitions](http://forum.xda-developers.com/google-nexus-5/development/modem-nexus-5-flashable-modems-efs-t2514095).
 
 * The partition map and backup plan will be printed with
@@ -150,6 +150,8 @@ your host OS is Linux, `--pipe` should be faster and more reliable.
   ```
   -t, --tcp             ADB TCP forwarding (fast, should work with any host
                         OS, but prone to timing problems)
+  -x, --exec-out        ADB exec-out binary pipe (should work with any host
+                        OS, but only with newer versions of adb and TWRP)
   -6, --base64          Base64 pipe (very slow, should work with any host OS)
   -P, --pipe            Binary pipe (fast, but will PROBABLY CORRUPT DATA on
                         non-Linux host)
