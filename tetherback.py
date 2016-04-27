@@ -118,6 +118,17 @@ def really_unforward(port, tries=3):
             return retry+1
         time.sleep(1)
 
+def uevent_dict(path):
+    lines = sp.check_output(adbcmd+('shell','cat "%s"'%path)).decode().splitlines()
+    d = {}
+    for l in lines:
+        if '=' not in l:
+            print( "WARNING: don't understand this line from %s: %s" % (repr(path), repr(l)), file=stderr )
+        else:
+            k, v = l.split('=',1)
+            d[k] = v
+    return d
+
 # check that device is booted into TWRP
 kver = sp.check_output(adbcmd+('shell','uname -r')).strip().lower().decode()
 if '-twrp-' not in kver:
@@ -127,12 +138,12 @@ else:
 
 # build partition map
 partmap = []
-d = dict(l.decode().split('=',1) for l in sp.check_output(adbcmd+('shell','cat /sys/block/mmcblk0/uevent')).splitlines())
+d = uevent_dict('/sys/block/mmcblk0/uevent')
 nparts = int(d['NPARTS'])
 print("Reading partition map for mmcblk0 (%d partitions)..." % nparts, file=stderr)
 pbar = ProgressBar(maxval=nparts, widgets=['  partition map: ', Percentage(), ' ', ETA()]).start()
 for ii in range(1, nparts+1):
-    d = dict(l.decode().split('=',1) for l in sp.check_output(adbcmd+('shell','cat /sys/block/mmcblk0/mmcblk0p%d/uevent'%ii)).splitlines())
+    d = uevent_dict('/sys/block/mmcblk0/mmcblk0p%d/uevent'%ii)
     size = int(sp.check_output(adbcmd+('shell','cat /sys/block/mmcblk0/mmcblk0p%d/size'%ii)))
     partmap.append((d['PARTNAME'], d['DEVNAME'], int(d['PARTN']), size))
     pbar.update(ii)
