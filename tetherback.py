@@ -6,7 +6,7 @@
 # Excludes /data/media*, just as TWRP does
 
 import subprocess as sp
-import os, sys, datetime, socket, time, argparse
+import os, sys, datetime, socket, time, argparse, re
 from sys import stderr
 from base64 import standard_b64decode as b64dec
 from progressbar import ProgressBar, Percentage, ETA, FileTransferSpeed, Bar
@@ -43,13 +43,24 @@ g.add_argument('-B', '--no-boot', dest='boot', action='store_false', default=Tru
 g.add_argument('-X', '--extra', action='append', dest='extra', metavar='NAME', default=[], help="Include extra partition as raw image")
 args = p.parse_args()
 
+# check ADB version
 try:
-    adbversions = sp.check_output(('adb','version')).strip().decode().split()[-1]
-except Exception:
+    output = sp.check_output(('adb','version')).decode()
+except sp.CalledProcessError:
     p.error("could not determine ADB version -- is the adb binary in your PATH?\n\thttp://developer.android.com/tools/help/adb.html")
+
+m = re.search(r'^Android Debug Bridge version ((?:\d+.)+\d+)', output)
+if not m:
+    p.error("could not determine ADB version")
+
+adbversions = m.group(1)
 adbversion = tuple(int(x) for x in adbversions.split('.'))
 if adbversion<(1,0,31):
     p.error("found ADB version %s, but version >= 1.0.31 is required" % adbversions)
+elif args.verbose:
+    print("Found ADB version %s" % adbversions)
+
+########################################
 
 if args.specific:
     adbcmd = ('adb','-s',args.specific)
