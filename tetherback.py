@@ -57,8 +57,12 @@ adbversions = m.group(1)
 adbversion = tuple(int(x) for x in adbversions.split('.'))
 if adbversion<(1,0,31):
     p.error("found ADB version %s, but version >= 1.0.31 is required" % adbversions)
+elif adbversion<(1,0,32) and args.transport==adbxp.pipe_xo:
+    print("WARNING: exec-out pipe (--exec-out) probably won't work with ADB version < 1.0.32 (you have %s)" % adbversions, file=stderr)
+elif sys.platform!='linux2' and args.transport==adbxp.pipe_bin:
+    print("WARNING: binary pipe (--pipe) may CORRUPT DATA on non-Linux host", file=stderr)
 elif args.verbose:
-    print("Found ADB version %s" % adbversions)
+    print("Found ADB version %s" % adbversions, file=stderr)
 
 ########################################
 
