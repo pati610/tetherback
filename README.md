@@ -3,10 +3,14 @@
 Tools to create TWRP and nandroid-style backups of an Android device via a USB connection,
 without using the device's internal storage or SD card.
 
+To guarantee against backup corruption during transfer, it generates
+[md5sums](https://en.wikipedia.org/wiki/md5sum) of the backup files on
+the device and then verifies that they match on the host.
+
 **WARNING:** This is a work in progress. I've only tested it on a
   [LG/Google Nexus 5](http://wikipedia.org/wiki/Nexus_5) with
   [TWRP recovery v3.0.0-0](https://twrp.me/site/update/2016/02/05/twrp-3.0.0-0-released.html),
-  with `adb` v1.0.31 under Ubuntu. You have been warned ☺
+  with `adb` v1.0.31 and v1.0.32 under Ubuntu Linux. You have been warned ☺
 
 ## Requirements
 
@@ -155,8 +159,8 @@ your host OS is Linux, `--pipe` should be faster and more reliable.
   -x, --exec-out        ADB exec-out binary pipe (should work with any host
                         OS, but only with newer versions of adb and TWRP)
   -6, --base64          Base64 pipe (very slow, should work with any host OS)
-  -P, --pipe            Binary pipe (fast, but will PROBABLY CORRUPT DATA on
-                        non-Linux host)
+  -P, --pipe            Binary pipe (fast, but probably only works
+                        on Linux hosts)
   ```
 
 
