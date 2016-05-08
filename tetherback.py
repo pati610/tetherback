@@ -60,7 +60,7 @@ if adbversion<(1,0,31):
 elif adbversion<(1,0,32) and args.transport==adbxp.pipe_xo:
     print("WARNING: exec-out pipe (--exec-out) probably won't work with ADB version < 1.0.32 (you have %s)" % adbversions, file=stderr)
 elif sys.platform!='linux2' and args.transport==adbxp.pipe_bin:
-    print("WARNING: binary pipe (--pipe) may CORRUPT DATA on non-Linux host", file=stderr)
+    print("WARNING: binary pipe (--pipe) will PROBABLY CORRUPT DATA on non-Linux host", file=stderr)
 elif args.verbose:
     print("Found ADB version %s" % adbversions, file=stderr)
 
