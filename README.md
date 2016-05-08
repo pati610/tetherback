@@ -11,7 +11,9 @@ without using the device's internal storage or SD card.
 ## Requirements
 
 * Python 3.3+
-  * `progressbar2` and `tabulate` packages are needed (`pip install progressbar2 tabulate` should do it)
+  * `progressbar2` and `tabulate` packages are needed. `pip3 install
+    progressbar2 tabulate` should do (on most systems, `pip` invokes
+    the Python 2.x version, while `pip3` invokes the Python 3.x version)
 * You must have [TWRP recovery](https://twrp.me/) installed on your rooted Android device
 * [`adb`](https://en.wikipedia.org/wiki/Android_software_development#ADB) (Android Debug Bridge) command-line tools
 
