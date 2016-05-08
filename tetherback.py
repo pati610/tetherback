@@ -145,11 +145,13 @@ def uevent_dict(path):
     return d
 
 # check that device is booted into TWRP
-kver = sp.check_output(adbcmd+('shell','uname -r')).strip().lower().decode()
-if '-twrp-' not in kver:
-    p.error("device reports non-TWRP kernel (%s)\n\tplease boot into TWRP recovery and retry." % kver)
+output = sp.check_output(adbcmd+('shell','twrp -v')).strip().decode()
+m = re.search(r'TWRP version ((?:\d+.)+\d+)', output)
+if not m:
+    print(output)
+    p.error("Device is not in TWRP; please boot into TWRP recovery and retry.")
 else:
-    print("Device reports TWRP kernel (%s)." % kver, file=stderr)
+    print("Device reports TWRP version %s" % m.group(1), file=stderr)
 
 # build partition map
 partmap = []
