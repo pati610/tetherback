@@ -12,6 +12,7 @@ from base64 import standard_b64decode as b64dec
 from progressbar import ProgressBar, Percentage, ETA, FileTransferSpeed, Bar
 from tabulate import tabulate
 from enum import Enum
+from hashlib import md5
 
 adbxp = Enum('AdbTransport', 'tcp pipe_xo pipe_b64 pipe_bin')
 
@@ -20,6 +21,7 @@ p.add_argument('-s', dest='specific', metavar='DEVICE_ID', default=None, help="S
 p.add_argument('-o', '--output-path', default=".", help="Set optional output path for backup files.")
 p.add_argument('-N', '--nandroid', action='store_true', help="Make nandroid backup; raw images rather than tarballs for /system and /data partitions (default is TWRP backup)")
 p.add_argument('-0', '--dry-run', action='store_true', help="Just show the partition map and backup plan, then exit.")
+p.add_argument('-V', '--no-verify', dest='verify', default=True, action='store_false', help="Don't record and verify md5sum of backup files (default is to verify).")
 p.add_argument('-v', '--verbose', action='count', default=0)
 g = p.add_argument_group('Data transfer methods',
                          description="The default is to use TCP forwarding. If you have problems, please try --base64 for a slow but reliable transfer method (and report issues at http://github.com/dlenski/tetherback/issues)")
@@ -31,7 +33,7 @@ x.add_argument('-x','--exec-out', dest='transport', action='store_const', const=
 x.add_argument('-6','--base64', dest='transport', action='store_const', const=adbxp.pipe_b64,
                help="Base64 pipe (very slow, should work with any host OS)")
 x.add_argument('-P','--pipe', dest='transport', action='store_const', const=adbxp.pipe_bin,
-               help="ADB shell binary pipe (fast, but will PROBABLY CORRUPT DATA on non-Linux host)")
+               help="ADB shell binary pipe (fast, but probably only works on Linux hosts)")
 g = p.add_argument_group('Backup contents')
 g.add_argument('-M', '--media', action='store_true', default=False, help="Include /data/media* in TWRP backup")
 g.add_argument('-D', '--data-cache', action='store_true', default=False, help="Include /data/*-cache in TWRP backup")
@@ -188,6 +190,9 @@ os.mkdir(backupdir)
 os.chdir(backupdir)
 print("Saving backup images in %s/ ..." % backupdir, file=stderr)
 
+if args.verify:
+    sp.check_call(adbcmd+('shell','rm -f /tmp/md5in; mknod /tmp/md5in p'), stderr=sp.DEVNULL)
+
 for partname, devname, partn, size in partmap:
     if partname in backup_partitions:
         fn, mount, taropts = backup_partitions[partname]
@@ -205,6 +210,10 @@ for partname, devname, partn, size in partmap:
             if not really_umount('/dev/block/'+devname, mount):
                 raise RuntimeError('%s: could not unmount %s' % (partname, mount))
             cmdline = 'dd if=/dev/block/%s 2> /dev/null | gzip -f' % devname
+
+        if args.verify:
+            cmdline = 'md5sum /tmp/md5in > /tmp/md5out & %s | tee /tmp/md5in' % cmdline
+            localmd5 = md5()
 
         if args.transport == adbxp.pipe_bin:
             # need stty -onlcr to make adb-shell an 8-bit-clean pipe: http://stackoverflow.com/a/20141481/20789
@@ -240,10 +249,20 @@ for partname, devname, partn, size in partmap:
         with open(fn, 'wb') as out:
             for block in block_iter:
                 out.write(block)
+                if args.verify:
+                    localmd5.update(block)
                 pbar.update(out.tell())
             else:
                 pbar.maxval = out.tell() or pbar.maxval # need to adjust for the smaller compressed size
                 pbar.finish()
+
+        if args.verify:
+            devicemd5 = sp.check_output(adbcmd+('shell','cat /tmp/md5out')).strip().decode().split()[0]
+            localmd5 = localmd5.hexdigest()
+            if devicemd5 != localmd5:
+                raise RuntimeError("md5sum mismatch (local %s, device %s)" % (localmd5, devicemd5))
+            with open(fn+'.md5', 'w') as md5out:
+                print('%s *%s' % (localmd5, fn), file=md5out)
 
         if args.transport==adbxp.tcp:
             s.close()
