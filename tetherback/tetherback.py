@@ -164,7 +164,8 @@ pbar = ProgressBar(maxval=nparts, widgets=['  partition map: ', Percentage(), ' 
 for ii in range(1, nparts+1):
     d = uevent_dict('/sys/block/mmcblk0/mmcblk0p%d/uevent'%ii)
     size = int(sp.check_output(adbcmd+('shell','cat /sys/block/mmcblk0/mmcblk0p%d/size'%ii)))
-    partmap.append((d['PARTNAME'], d['DEVNAME'], int(d['PARTN']), size))
+    # some devices have uppercase names, see #14
+    partmap.append((d['PARTNAME'].lower(), d['DEVNAME'], int(d['PARTN']), size))
     pbar.update(ii)
 else:
     pbar.finish()
