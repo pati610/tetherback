@@ -2,7 +2,7 @@
 
 from distutils.core import setup
 
-setup(name="Android backup via USB",
+setup(name="tetherback",
       version="0.1.0",
       description=("Create backups of an Android device over USB (requires adb and TWRP recovery)"),
       long_description=open('README.md').read(),
