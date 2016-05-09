@@ -12,12 +12,18 @@ the device and then verifies that they match on the host.
   [TWRP recovery v3.0.0-0](https://twrp.me/site/update/2016/02/05/twrp-3.0.0-0-released.html),
   with `adb` v1.0.31 and v1.0.32 under Ubuntu Linux. You have been warned ☺
 
-## Requirements
+## Requirements and installation
 
 * Python 3.3+
-  * `progressbar2` and `tabulate` packages are needed. `pip3 install
-    progressbar2 tabulate` should do (on most systems, `pip` invokes
+  * Install with `pip3`: (Note that on most systems, `pip` invokes
     the Python 2.x version, while `pip3` invokes the Python 3.x version)
+
+    ```
+    $ pip3 install https://github.com/dlenski/tetherback/archive/v0.2.zip
+    ```
+
+  * Manual installation: `progressbar2` and `tabulate` packages are
+    needed. (This should do it: `pip3 install progressbar2 tabulate`.)
 * You must have [TWRP recovery](https://twrp.me/) installed on your rooted Android device
 * [`adb`](https://en.wikipedia.org/wiki/Android_software_development#ADB) (Android Debug Bridge) command-line tools
 
@@ -37,7 +43,7 @@ List of devices attached
   and `data.ext4.win`:
 
     ```bash
-    $ ./tetherback.py
+    $ tetherback
     Device reports TWRP kernel (3.4.0-bricked-hammerhead-twrp-g7b77eb4).
     Reading partition map for mmcblk0 (29 partitions)...
       partition map: 100% Time: 0:00:03
@@ -55,7 +61,7 @@ List of devices attached
   `<label>.img.gz`):
 
     ```bash
-    $ ./tetherback.py -n
+    $ tetherback -n
     Device reports TWRP kernel (3.4.0-bricked-hammerhead-twrp-g7b77eb4).
     Reading partition map for mmcblk0 (29 partitions)...
       partition map: 100% Time: 0:00:03
