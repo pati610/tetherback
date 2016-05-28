@@ -13,6 +13,7 @@ from progressbar import ProgressBar, Percentage, ETA, FileTransferSpeed, Bar, Da
 from tabulate import tabulate
 from enum import Enum
 from hashlib import md5
+from collections import OrderedDict as odict
 
 adbxp = Enum('AdbTransport', 'tcp pipe_xo pipe_b64 pipe_bin')
 
@@ -75,12 +76,12 @@ else:
 
 if args.nandroid:
     rp = args.extra + [x for x in ('boot','recovery','system','userdata','cache') if getattr(args, x)]
-    backup_partitions = {p: ('%s.tar.gz'%p, None, None) for p in rp}
+    backup_partitions = odict((p,('%s.tar.gz'%p, None, None)) for p in rp)
 else:
     rp = args.extra + [x for x in ('boot','recovery') if getattr(args, x)]
-    backup_partitions = {p: ('%s.emmc.win'%p, None, None) for p in rp}
+    backup_partitions = odict((p,('%s.emmc.win'%p, None, None)) for p in rp)
     mp = [x for x in ('cache','system') if getattr(args, x)]
-    backup_partitions.update(**{p: ('%s.ext4.win'%p, '/%s'%p, '-p') for p in mp})
+    backup_partitions.update((p,('%s.ext4.win'%p, '/%s'%p, '-p')) for p in mp)
 
     if args.userdata:
         data_omit = []
@@ -156,7 +157,7 @@ else:
     print("Device reports TWRP version %s" % m.group(1), file=stderr)
 
 # build partition map
-partmap = []
+partmap = odict()
 d = uevent_dict('/sys/block/mmcblk0/uevent')
 nparts = int(d['NPARTS'])
 print("Reading partition map for mmcblk0 (%d partitions)..." % nparts, file=stderr)
@@ -165,17 +166,24 @@ for ii in range(1, nparts+1):
     d = uevent_dict('/sys/block/mmcblk0/mmcblk0p%d/uevent'%ii)
     size = int(sp.check_output(adbcmd+('shell','cat /sys/block/mmcblk0/mmcblk0p%d/size'%ii)))
     # some devices have uppercase names, see #14
-    partmap.append((d['PARTNAME'].lower(), d['DEVNAME'], int(d['PARTN']), size))
+    partmap[d['PARTNAME'].lower()] = (d['DEVNAME'], int(d['PARTN']), size)
     pbar.update(ii)
 else:
     pbar.finish()
 
-if args.dry_run or args.verbose > 0:
+# check that all partitions intended for backup exist
+missing = set(backup_partitions) - set(partmap)
+
+# print partition map
+if args.dry_run or missing or args.verbose > 0:
     print()
     print(tabulate( [[ devname, partname, size//2] + backup_how(partname, backup_partitions)
-                     for partname, devname, partn, size in partmap],
+                     for partname, (devname, partn, size) in partmap.items() ],
                     [ 'BLOCK DEVICE','NAME','SIZE (KiB)','FILENAME','FORMAT' ] ))
     print()
+
+if missing:
+    p.error("Partitions were requested for backup, but not found in the partition map: %s" % ', '.join(missing))
 
 if args.dry_run:
     p.exit()
@@ -194,79 +202,78 @@ print("Saving backup images in %s/ ..." % backupdir, file=stderr)
 if args.verify:
     sp.check_call(adbcmd+('shell','rm -f /tmp/md5in; mknod /tmp/md5in p'), stderr=sp.DEVNULL)
 
-for partname, devname, partn, size in partmap:
-    if partname in backup_partitions:
-        fn, mount, taropts = backup_partitions[partname]
+for partname, (fn, mount, taropts) in backup_partitions.items():
+    devname, partn, size = partmap[partname]
 
-        if mount:
-            print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (devname, mount, size/2048))
-            fstype = really_mount('/dev/block/'+devname, mount)
-            if not fstype:
-                raise RuntimeError('%s: could not mount %s' % (partname, mount))
-            elif fstype != 'ext4':
-                raise RuntimeError('%s: expected ext4 filesystem, but found %s' % (partname, fstype))
-            cmdline = 'tar -czC %s %s . 2> /dev/null' % (mount, taropts or '')
+    if mount:
+        print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (devname, mount, size/2048))
+        fstype = really_mount('/dev/block/'+devname, mount)
+        if not fstype:
+            raise RuntimeError('%s: could not mount %s' % (partname, mount))
+        elif fstype != 'ext4':
+            raise RuntimeError('%s: expected ext4 filesystem, but found %s' % (partname, fstype))
+        cmdline = 'tar -czC %s %s . 2> /dev/null' % (mount, taropts or '')
+    else:
+        print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
+        if not really_umount('/dev/block/'+devname, mount):
+            raise RuntimeError('%s: could not unmount %s' % (partname, mount))
+        cmdline = 'dd if=/dev/block/%s 2> /dev/null | gzip -f' % devname
+
+    if args.verify:
+        cmdline = 'md5sum /tmp/md5in > /tmp/md5out & %s | tee /tmp/md5in' % cmdline
+        localmd5 = md5()
+
+    if args.transport == adbxp.pipe_bin:
+        # need stty -onlcr to make adb-shell an 8-bit-clean pipe: http://stackoverflow.com/a/20141481/20789
+        child = sp.Popen(adbcmd+('shell','stty -onlcr && '+cmdline), stdout=sp.PIPE)
+        block_iter = iter(lambda: child.stdout.read(65536), b'')
+    elif args.transport == adbxp.pipe_b64:
+        # pipe output through base64: excruciatingly slow
+        child = sp.Popen(adbcmd+('shell',cmdline+'| base64'), stdout=sp.PIPE)
+        block_iter = iter(lambda: b64dec(b''.join(child.stdout.readlines(65536))), b'')
+    elif args.transport == adbxp.pipe_xo:
+        # use adb exec-out, which is
+        # (a) only available with newer versions of adb on the host, and
+        # (b) only works with newer versions of TWRP (works with 2.8.0 for @kerlerm)
+        # https://plus.google.com/110558071969009568835/posts/Ar3FdhknHo3
+        # https://android.googlesource.com/platform/system/core/+/5d9d434efadf1c535c7fea634d5306e18c68ef1f/adb/commandline.c#1244
+        child = sp.Popen(adbcmd+('exec-out',cmdline), stdout=sp.PIPE)
+        block_iter = iter(lambda: child.stdout.read(65536), b'')
+    else:
+        port = really_forward(5600+partn, 5700+partn)
+        if not port:
+            raise RuntimeError('%s: could not ADB-forward a TCP port')
+        child = sp.Popen(adbcmd+('shell',cmdline + '| nc -l -p%d -w3'%port), stdout=sp.PIPE)
+
+        # FIXME: need a better way to check that socket is ready to transmit
+        time.sleep(1)
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect(('localhost', port))
+        block_iter = iter(lambda: s.recv(65536), b'')
+
+    pbwidgets = ['  %s: ' % fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed(), ' ', DataSize() ]
+    pbar = ProgressBar(max_value=size*512, widgets=pbwidgets).start()
+
+    with open(fn, 'wb') as out:
+        for block in block_iter:
+            out.write(block)
+            if args.verify:
+                localmd5.update(block)
+            pbar.update(out.tell())
         else:
-            print("Saving partition %s (%s), %d MiB uncompressed..." % (partname, devname, size/2048))
-            if not really_umount('/dev/block/'+devname, mount):
-                raise RuntimeError('%s: could not unmount %s' % (partname, mount))
-            cmdline = 'dd if=/dev/block/%s 2> /dev/null | gzip -f' % devname
+            pbar.max_value = out.tell() or pbar.max_value # need to adjust for the smaller compressed size
+            pbar.finish()
 
-        if args.verify:
-            cmdline = 'md5sum /tmp/md5in > /tmp/md5out & %s | tee /tmp/md5in' % cmdline
-            localmd5 = md5()
+    if args.verify:
+        devicemd5 = sp.check_output(adbcmd+('shell','cat /tmp/md5out')).strip().decode().split()[0]
+        localmd5 = localmd5.hexdigest()
+        if devicemd5 != localmd5:
+            raise RuntimeError("md5sum mismatch (local %s, device %s)" % (localmd5, devicemd5))
+        with open(fn+'.md5', 'w') as md5out:
+            print('%s *%s' % (localmd5, fn), file=md5out)
 
-        if args.transport == adbxp.pipe_bin:
-            # need stty -onlcr to make adb-shell an 8-bit-clean pipe: http://stackoverflow.com/a/20141481/20789
-            child = sp.Popen(adbcmd+('shell','stty -onlcr && '+cmdline), stdout=sp.PIPE)
-            block_iter = iter(lambda: child.stdout.read(65536), b'')
-        elif args.transport == adbxp.pipe_b64:
-            # pipe output through base64: excruciatingly slow
-            child = sp.Popen(adbcmd+('shell',cmdline+'| base64'), stdout=sp.PIPE)
-            block_iter = iter(lambda: b64dec(b''.join(child.stdout.readlines(65536))), b'')
-        elif args.transport == adbxp.pipe_xo:
-            # use adb exec-out, which is
-            # (a) only available with newer versions of adb on the host, and
-            # (b) only works with newer versions of TWRP (works with 2.8.0 for @kerlerm)
-            # https://plus.google.com/110558071969009568835/posts/Ar3FdhknHo3
-            # https://android.googlesource.com/platform/system/core/+/5d9d434efadf1c535c7fea634d5306e18c68ef1f/adb/commandline.c#1244
-            child = sp.Popen(adbcmd+('exec-out',cmdline), stdout=sp.PIPE)
-            block_iter = iter(lambda: child.stdout.read(65536), b'')
-        else:
-            port = really_forward(5600+partn, 5700+partn)
-            if not port:
-                raise RuntimeError('%s: could not ADB-forward a TCP port')
-            child = sp.Popen(adbcmd+('shell',cmdline + '| nc -l -p%d -w3'%port), stdout=sp.PIPE)
-
-            # FIXME: need a better way to check that socket is ready to transmit
-            time.sleep(1)
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect(('localhost', port))
-            block_iter = iter(lambda: s.recv(65536), b'')
-
-        pbwidgets = ['  %s: ' % fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed(), ' ', DataSize() ]
-        pbar = ProgressBar(max_value=size*512, widgets=pbwidgets).start()
-
-        with open(fn, 'wb') as out:
-            for block in block_iter:
-                out.write(block)
-                if args.verify:
-                    localmd5.update(block)
-                pbar.update(out.tell())
-            else:
-                pbar.max_value = out.tell() or pbar.max_value # need to adjust for the smaller compressed size
-                pbar.finish()
-
-        if args.verify:
-            devicemd5 = sp.check_output(adbcmd+('shell','cat /tmp/md5out')).strip().decode().split()[0]
-            localmd5 = localmd5.hexdigest()
-            if devicemd5 != localmd5:
-                raise RuntimeError("md5sum mismatch (local %s, device %s)" % (localmd5, devicemd5))
-            with open(fn+'.md5', 'w') as md5out:
-                print('%s *%s' % (localmd5, fn), file=md5out)
-
-        if args.transport==adbxp.tcp:
-            s.close()
-            if not really_unforward(port):
-                raise RuntimeError('could not remove ADB-forward for TCP port %d' % port)
-        child.terminate()
+    if args.transport==adbxp.tcp:
+        s.close()
+        if not really_unforward(port):
+            raise RuntimeError('could not remove ADB-forward for TCP port %d' % port)
+    child.terminate()
