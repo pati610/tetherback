@@ -23,7 +23,7 @@ the device and then verifies that they match on the host.
     the Python 2.x version, while `pip3` invokes the Python 3.x version)
 
     ```
-    $ pip3 install https://github.com/dlenski/tetherback/archive/v0.2.zip
+    $ pip3 install https://github.com/dlenski/tetherback/archive/v0.3.zip
     ```
 
   * Manual installation: `progressbar2` and `tabulate` packages are
