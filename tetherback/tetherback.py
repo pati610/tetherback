@@ -9,7 +9,7 @@ import subprocess as sp
 import os, sys, datetime, socket, time, argparse, re
 from sys import stderr
 from base64 import standard_b64decode as b64dec
-from progressbar import ProgressBar, Percentage, ETA, FileTransferSpeed, Bar
+from progressbar import ProgressBar, Percentage, ETA, FileTransferSpeed, Bar, DataSize
 from tabulate import tabulate
 from enum import Enum
 from hashlib import md5
@@ -160,7 +160,7 @@ partmap = []
 d = uevent_dict('/sys/block/mmcblk0/uevent')
 nparts = int(d['NPARTS'])
 print("Reading partition map for mmcblk0 (%d partitions)..." % nparts, file=stderr)
-pbar = ProgressBar(maxval=nparts, widgets=['  partition map: ', Percentage(), ' ', ETA()]).start()
+pbar = ProgressBar(max_value=nparts, widgets=['  partition map: ', Percentage(), ' ', ETA()]).start()
 for ii in range(1, nparts+1):
     d = uevent_dict('/sys/block/mmcblk0/mmcblk0p%d/uevent'%ii)
     size = int(sp.check_output(adbcmd+('shell','cat /sys/block/mmcblk0/mmcblk0p%d/size'%ii)))
@@ -244,8 +244,8 @@ for partname, devname, partn, size in partmap:
             s.connect(('localhost', port))
             block_iter = iter(lambda: s.recv(65536), b'')
 
-        pbwidgets = ['  %s: ' % fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed()]
-        pbar = ProgressBar(maxval=size*512, widgets=pbwidgets).start()
+        pbwidgets = ['  %s: ' % fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed(), ' ', DataSize() ]
+        pbar = ProgressBar(max_value=size*512, widgets=pbwidgets).start()
 
         with open(fn, 'wb') as out:
             for block in block_iter:
@@ -254,7 +254,7 @@ for partname, devname, partn, size in partmap:
                     localmd5.update(block)
                 pbar.update(out.tell())
             else:
-                pbar.maxval = out.tell() or pbar.maxval # need to adjust for the smaller compressed size
+                pbar.max_value = out.tell() or pbar.max_value # need to adjust for the smaller compressed size
                 pbar.finish()
 
         if args.verify:
