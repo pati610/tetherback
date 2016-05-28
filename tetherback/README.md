@@ -7,10 +7,14 @@ To guarantee against backup corruption during transfer, it generates
 [md5sums](https://en.wikipedia.org/wiki/md5sum) of the backup files on
 the device and then verifies that they match on the host.
 
-**WARNING:** This is a work in progress. I've only tested it on a
-  [LG/Google Nexus 5](http://wikipedia.org/wiki/Nexus_5) with
-  [TWRP recovery v3.0.0-0](https://twrp.me/site/update/2016/02/05/twrp-3.0.0-0-released.html),
-  with `adb` v1.0.31 and v1.0.32 under Ubuntu Linux. You have been warned ☺
+**WARNING:** This is a work in progress. I have personally tested it on the
+** following device/recovery/host combinations…
+
+| Device | Codename | TWRP recovery | `adb` | Host OS | Comments |
+|--------|----------|---------------|-------|---------|----------|
+| [LG/Google Nexus 5](http://wikipedia.org/wiki/Nexus_5) | hammerhead | [v3.0.0-0](https://twrp.me/site/update/2016/02/05/twrp-3.0.0-0-released.html) | v1.0.31 | Ubuntu amd64 | working |
+| [LG/Google Nexus 5](http://wikipedia.org/wiki/Nexus_5) | hammerhead | [v3.0.0-0](https://twrp.me/site/update/2016/02/05/twrp-3.0.0-0-released.html) | v1.0.32 | Ubuntu amd64 | working |
+| [Samsung Galaxy S4](https://en.wikipedia.org/wiki/Samsung_Galaxy_S4) L720T | jfltespr | [v3.0.2-0](https://twrp.me/site/update/2016/04/05/twrp-3.0.2-0-released.html) | v1.0.32 | Ubuntu amd64 | working |
 
 ## Requirements and installation
 
