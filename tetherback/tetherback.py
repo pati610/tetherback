@@ -24,6 +24,7 @@ p.add_argument('-N', '--nandroid', action='store_true', help="Make nandroid back
 p.add_argument('-0', '--dry-run', action='store_true', help="Just show the partition map and backup plan, then exit.")
 p.add_argument('-V', '--no-verify', dest='verify', default=True, action='store_false', help="Don't record and verify md5sum of backup files (default is to verify).")
 p.add_argument('-v', '--verbose', action='count', default=0)
+p.add_argument('-f', '--force', action='store_true', help="DANGEROUS! DO NOT USE! (Tries to proceed even if TWRP recovery is not detected.)")
 g = p.add_argument_group('Data transfer methods',
                          description="The default is to use TCP forwarding. If you have problems, please try --base64 for a slow but reliable transfer method (and report issues at http://github.com/dlenski/tetherback/issues)")
 x = g.add_mutually_exclusive_group()
@@ -150,7 +151,17 @@ def uevent_dict(path):
 # check that device is booted into TWRP
 output = sp.check_output(adbcmd+('shell','twrp -v')).strip().decode()
 m = re.search(r'TWRP version ((?:\d+.)+\d+)', output)
-if not m:
+if not m and args.force:
+    print("********************")
+    print("Device does not appear to be in TWRP recovery, but you specified --force")
+    print("If you try to run a backup while booted in the Android OS:")
+    print("  - You will probably get errors.")
+    print("  - Even if the backup runs without error, it is likely to be corrupted")
+    print("Unless you are developing or debugging %s, don't use this." % p.prog)
+    print("********************")
+    if input("Really proceed (y/N)? ")[:1].lower() != 'y':
+        raise SystemExit(1)
+elif not m:
     print(output)
     p.error("Device is not in TWRP; please boot into TWRP recovery and retry.")
 else:
