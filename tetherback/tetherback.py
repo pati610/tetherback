@@ -189,7 +189,8 @@ missing = set(backup_partitions) - set(partmap)
 if args.dry_run or missing or args.verbose > 0:
     print()
     print(tabulate( [[ devname, partname, size//2] + backup_how(partname, backup_partitions)
-                     for partname, (devname, partn, size) in partmap.items() ],
+                       for partname, (devname, partn, size) in partmap.items() ]
+                    +[[ '', 'Total:', sum(size//2 for devname, partn, size in partmap.values()), '', '']],
                     [ 'BLOCK DEVICE','NAME','SIZE (KiB)','FILENAME','FORMAT' ] ))
     print()
 
