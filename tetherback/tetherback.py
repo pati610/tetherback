@@ -120,9 +120,12 @@ def really_umount(dev, node):
             break
     for l in sp.check_output(adbcmd+('shell','mount')).splitlines():
         f = l.decode().split()
-        mdev, mnode = (f[0], f[2]) if (f[1], f[3])==('on','type') else (f[0], f[1])
-        if mdev==dev or mnode==node:
-            return False
+        if len(f)<4:
+            print( "WARNING: don't understand output from mount: %s" % (repr(l)), file=stderr )
+        else:
+            mdev, mnode = (f[0], f[2]) if (f[1], f[3])==('on','type') else (f[0], f[1])
+            if mdev==dev or mnode==node:
+                return False
     return True
 
 def really_forward(port1, port2):
@@ -141,7 +144,9 @@ def uevent_dict(path):
     lines = sp.check_output(adbcmd+('shell','cat "%s"'%path)).decode().splitlines()
     d = {}
     for l in lines:
-        if '=' not in l:
+        if not l:
+            pass
+        elif '=' not in l:
             print( "WARNING: don't understand this line from %s: %s" % (repr(path), repr(l)), file=stderr )
         else:
             k, v = l.split('=',1)
