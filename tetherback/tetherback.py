@@ -108,9 +108,14 @@ def really_mount(dev, node, mode='ro'):
             break
     for l in sp.check_output(adbcmd+('shell','mount')).splitlines():
         f = l.decode().split()
-        mdev, mnode, mtype = (f[0], f[2], f[4]) if (f[1], f[3])==('on','type') else (f[0], f[1], f[2])
-        if mdev==dev or mnode==node:
-            return mtype
+        if not l:
+            pass
+        elif len(f)<4:
+            print( "WARNING: don't understand output from mount: %s" % (repr(l)), file=stderr )
+        else:
+            mdev, mnode, mtype = (f[0], f[2], f[4]) if (f[1], f[3])==('on','type') else (f[0], f[1], f[2])
+            if mdev==dev or mnode==node:
+                return mtype
 
 def really_umount(dev, node):
     for opts in ('','-f','-l','-r'):
@@ -120,7 +125,9 @@ def really_umount(dev, node):
             break
     for l in sp.check_output(adbcmd+('shell','mount')).splitlines():
         f = l.decode().split()
-        if len(f)<4:
+        if not l:
+            pass
+        elif len(f)<4:
             print( "WARNING: don't understand output from mount: %s" % (repr(l)), file=stderr )
         else:
             mdev, mnode = (f[0], f[2]) if (f[1], f[3])==('on','type') else (f[0], f[1])
