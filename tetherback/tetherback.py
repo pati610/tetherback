@@ -296,8 +296,8 @@ for partname, (fn, mount, taropts) in backup_partitions.items():
         with open(fn+'.md5', 'w') as md5out:
             print('%s *%s' % (localmd5, fn), file=md5out)
 
+    child.wait()
     if args.transport==adbxp.tcp:
         s.close()
         if not really_unforward(port):
             raise RuntimeError('could not remove ADB-forward for TCP port %d' % port)
-    child.terminate()
