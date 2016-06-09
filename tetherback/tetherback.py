@@ -165,6 +165,21 @@ def uevent_dict(path):
             d[k] = v
     return d
 
+def fstab_dict(path='/etc/fstab'):
+    lines = sp.check_output(adbcmd+('shell','cat '+path)).decode().splitlines()
+    d = {}
+    for l in lines:
+        if not l:
+            pass
+        else:
+            f = l.split()
+            if len(f)<3:
+                print( "WARNING: don't understand this line from %s: %s" % (repr(path), repr(l)), file=stderr )
+            else:
+                # devname -> (mountpoint, fstype)
+                d[f[0]] = (f[1], f[2])
+    return d
+
 # check that device is booted into TWRP
 kernel = sp.check_output(adbcmd+('shell','uname -r')).strip().decode()
 print("Device reports kernel %s" % kernel, file=stderr)
@@ -188,6 +203,7 @@ else:
 
 # build partition map
 partmap = odict()
+fstab = fstab_dict('/etc/fstab')
 d = uevent_dict('/sys/block/mmcblk0/uevent')
 nparts = int(d['NPARTS'])
 print("Reading partition map for mmcblk0 (%d partitions)..." % nparts, file=stderr)
@@ -195,8 +211,9 @@ pbar = ProgressBar(max_value=nparts, widgets=['  partition map: ', Percentage(),
 for ii in range(1, nparts+1):
     d = uevent_dict('/sys/block/mmcblk0/mmcblk0p%d/uevent'%ii)
     size = int(sp.check_output(adbcmd+('shell','cat /sys/block/mmcblk0/mmcblk0p%d/size'%ii)))
+    mountpoint, fstype = fstab.get('/dev/block/%s'%d['DEVNAME'], (None, None))
     # some devices have uppercase names, see #14
-    partmap[d['PARTNAME'].lower()] = (d['DEVNAME'], int(d['PARTN']), size)
+    partmap[d['PARTNAME'].lower()] = (d['DEVNAME'], int(d['PARTN']), size, mountpoint, fstype)
     pbar.update(ii)
 else:
     pbar.finish()
@@ -207,10 +224,11 @@ missing = set(backup_partitions) - set(partmap)
 # print partition map
 if args.dry_run or missing or args.verbose > 0:
     print()
-    print(tabulate( [[ devname, partname, size//2] + backup_how(partname, backup_partitions)
-                       for partname, (devname, partn, size) in partmap.items() ]
-                    +[[ '', 'Total:', sum(size//2 for devname, partn, size in partmap.values()), '', '']],
-                    [ 'BLOCK DEVICE','NAME','SIZE (KiB)','FILENAME','FORMAT' ] ))
+    print(tabulate( [[ devname, partname, size//2, mountpoint, fstype]
+                     + backup_how(partname, backup_partitions)
+                       for partname, (devname, partn, size, mountpoint, fstype) in partmap.items() ]
+                    +[[ '', 'Total:', sum(size//2 for devname, partn, size, mountpoint, fstype in partmap.values()), '', '', '', '']],
+                    [ 'BLOCK DEVICE','NAME','SIZE (KiB)','MOUNT POINT','FSTYPE','FILENAME','FORMAT' ] ))
     print()
 
 if missing:
@@ -234,7 +252,7 @@ if args.verify:
     sp.check_call(adbcmd+('shell','rm -f /tmp/md5in; mknod /tmp/md5in p'), stderr=sp.DEVNULL)
 
 for partname, (fn, mount, taropts) in backup_partitions.items():
-    devname, partn, size = partmap[partname]
+    devname, partn, size, mountpoint, fstype = partmap[partname]
 
     if mount:
         print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (devname, mount, size/2048))
