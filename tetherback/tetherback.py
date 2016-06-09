@@ -61,12 +61,13 @@ adbversions = m.group(1)
 adbversion = tuple(int(x) for x in adbversions.split('.'))
 if adbversion<(1,0,31):
     p.error("found ADB version %s, but version >= 1.0.31 is required" % adbversions)
-elif adbversion<(1,0,32) and args.transport==adbxp.pipe_xo:
+else:
+    print("Found ADB version %s" % adbversions, file=stderr)
+
+if adbversion<(1,0,32) and args.transport==adbxp.pipe_xo:
     print("WARNING: exec-out pipe (--exec-out) probably won't work with ADB version < 1.0.32 (you have %s)" % adbversions, file=stderr)
 elif sys.platform!='linux2' and args.transport==adbxp.pipe_bin:
     print("WARNING: binary pipe (--pipe) will PROBABLY CORRUPT DATA on non-Linux host", file=stderr)
-else:
-    print("Found ADB version %s" % adbversions, file=stderr)
 
 ########################################
 
@@ -74,6 +75,10 @@ if args.specific:
     adbcmd = ('adb','-s',args.specific)
 else:
     adbcmd = ('adb','-d')
+
+########################################
+
+# Build table of partitions requested for backup
 
 if args.nandroid:
     rp = args.extra + [x for x in ('boot','recovery','system','userdata','cache') if getattr(args, x)]
@@ -161,6 +166,8 @@ def uevent_dict(path):
     return d
 
 # check that device is booted into TWRP
+kernel = sp.check_output(adbcmd+('shell','uname -r')).strip().decode()
+print("Device reports kernel %s" % kernel, file=stderr)
 output = sp.check_output(adbcmd+('shell','twrp -v')).strip().decode()
 m = re.search(r'TWRP version ((?:\d+.)+\d+)', output)
 if not m and args.force:
