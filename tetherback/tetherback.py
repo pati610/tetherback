@@ -74,35 +74,6 @@ elif sys.platform!='linux2' and args.transport==adbxp.pipe_bin:
 
 ########################################
 
-# Build table of partitions requested for backup
-
-if args.nandroid:
-    rp = args.extra + [x for x in ('boot','recovery','system','userdata','cache') if getattr(args, x)]
-    backup_partitions = odict((p,('%s.tar.gz'%p, None, None)) for p in rp)
-else:
-    rp = args.extra + [x for x in ('boot','recovery') if getattr(args, x)]
-    backup_partitions = odict((p,('%s.emmc.win'%p, None, None)) for p in rp)
-    mp = [x for x in ('cache','system') if getattr(args, x)]
-    backup_partitions.update((p,('%s.ext4.win'%p, '/%s'%p, '-p')) for p in mp)
-
-    if args.userdata:
-        data_omit = []
-        if not args.media: data_omit.append("media*")
-        if not args.data_cache: data_omit.append("*-cache")
-        backup_partitions['userdata'] = ('data.ext4.win', '/data', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
-
-########################################
-
-def backup_how(devname, bp):
-    if devname not in bp:
-        return [None, None]
-    else:
-        fn, mount, taropts = bp[devname]
-        if mount:
-            return [fn, "tar -czC %s %s" % (mount, taropts)]
-        else:
-            return [fn, "gzipped raw image"]
-
 # check that device is booted into TWRP
 kernel = adb.check_output(('shell','uname -r')).strip()
 print("Device reports kernel %s" % kernel, file=stderr)
@@ -140,6 +111,36 @@ for ii in range(1, nparts+1):
     pbar.update(ii)
 else:
     pbar.finish()
+
+########################################
+
+def backup_how(devname, bp):
+    if devname not in bp:
+        return [None, None]
+    else:
+        fn, mount, taropts = bp[devname]
+        if mount:
+            return [fn, "tar -czC %s %s" % (mount, taropts)]
+        else:
+            return [fn, "gzipped raw image"]
+
+
+# Build table of partitions requested for backup
+
+if args.nandroid:
+    rp = args.extra + [x for x in ('boot','recovery','system','userdata','cache') if getattr(args, x)]
+    backup_partitions = odict((p,('%s.tar.gz'%p, None, None)) for p in rp)
+else:
+    rp = args.extra + [x for x in ('boot','recovery') if getattr(args, x)]
+    backup_partitions = odict((p,('%s.emmc.win'%p, None, None)) for p in rp)
+    mp = [x for x in ('cache','system') if getattr(args, x)]
+    backup_partitions.update((p,('%s.ext4.win'%p, '/%s'%p, '-p')) for p in mp)
+
+    if args.userdata:
+        data_omit = []
+        if not args.media: data_omit.append("media*")
+        if not args.data_cache: data_omit.append("*-cache")
+        backup_partitions['userdata'] = ('data.ext4.win', '/data', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
 
 # check that all partitions intended for backup exist
 missing = set(backup_partitions) - set(partmap)
