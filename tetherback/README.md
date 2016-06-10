@@ -8,13 +8,21 @@ To guarantee against backup corruption during transfer, it generates
 the device and then verifies that they match on the host.
 
 **WARNING:** This is a work in progress. I have personally tested it on the
-** following device/recovery/host combinations…
+following device/recovery/host combinations…
 
 | Device | Codename | TWRP recovery | `adb` | Host OS | Comments |
 |--------|----------|---------------|-------|---------|----------|
 | [LG/Google Nexus 5](http://wikipedia.org/wiki/Nexus_5) | hammerhead | [v3.0.0-0](https://twrp.me/site/update/2016/02/05/twrp-3.0.0-0-released.html) | v1.0.31 | Ubuntu amd64 | working |
 | [LG/Google Nexus 5](http://wikipedia.org/wiki/Nexus_5) | hammerhead | [v3.0.0-0](https://twrp.me/site/update/2016/02/05/twrp-3.0.0-0-released.html) | v1.0.32 | Ubuntu amd64 | working |
 | [Samsung Galaxy S4](https://en.wikipedia.org/wiki/Samsung_Galaxy_S4) L720T | jfltespr | [v3.0.2-0](https://twrp.me/site/update/2016/04/05/twrp-3.0.2-0-released.html) | v1.0.32 | Ubuntu amd64 | working |
+
+Other users have reported success—and
+[issues](https://github.com/dlenski/tetherback/issues?q=is%3Aissue+is%3Aclosed)
+☺—with other devices, including
+[`picassowifi`](https://wiki.cyanogenmod.org/w/Picassowifi_Info),
+[`cancro`](https://wiki.cyanogenmod.org/w/Cancro_Info),
+[`Z00T`](https://wiki.cyanogenmod.org/w/Z00T_Info); and other operating
+systems, various versions of Windows and Mac OS X.
 
 ## Requirements and installation
 
