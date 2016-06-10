@@ -13,7 +13,7 @@ from progressbar import ProgressBar, Percentage, ETA, FileTransferSpeed, Bar, Da
 from tabulate import tabulate
 from enum import Enum
 from hashlib import md5
-from collections import OrderedDict as odict
+from collections import namedtuple, OrderedDict as odict
 
 from .adb_wrapper import AdbWrapper
 from .adb_stuff import *
@@ -95,6 +95,10 @@ elif not m:
 else:
     print("Device reports TWRP version %s" % m.group(1), file=stderr)
 
+########################################
+
+PartInfo = namedtuple('PartInfo', 'partname devname partn size mountpoint fstype')
+
 # build partition map
 partmap = odict()
 fstab = fstab_dict(adb, '/etc/fstab')
@@ -104,10 +108,24 @@ print("Reading partition map for mmcblk0 (%d partitions)..." % nparts, file=stde
 pbar = ProgressBar(max_value=nparts, widgets=['  partition map: ', Percentage(), ' ', ETA()]).start()
 for ii in range(1, nparts+1):
     d = uevent_dict(adb, '/sys/block/mmcblk0/mmcblk0p%d/uevent'%ii)
+    devname, partn = d['DEVNAME'], int(d['PARTN'])
     size = int(adb.check_output(('shell','cat /sys/block/mmcblk0/mmcblk0p%d/size'%ii)))
     mountpoint, fstype = fstab.get('/dev/block/%s'%d['DEVNAME'], (None, None))
+
     # some devices have uppercase names, see #14
-    partmap[d['PARTNAME'].lower()] = (d['DEVNAME'], int(d['PARTN']), size, mountpoint, fstype)
+    partname = d['PARTNAME'].lower()
+
+    # some devices apparently use non-standard partition names, though standard mount points, see #18
+    if partname=='system' or mountpoint=='/system':
+        standard = 'system'
+    elif partname=='userdata' or mountpoint=='/data':
+        standard = 'userdata'
+    elif partname=='cache' or mountpoint=='/cache':
+        standard = 'cache'
+    else:
+        standard = partname
+
+    partmap[standard] = PartInfo(partname, devname, partn, size, mountpoint, fstype)
     pbar.update(ii)
 else:
     pbar.finish()
@@ -124,39 +142,41 @@ def backup_how(devname, bp):
         else:
             return [fn, "gzipped raw image"]
 
+BackupPlan = namedtuple('BackupPlan', 'fn mount taropts')
 
 # Build table of partitions requested for backup
-
 if args.nandroid:
     rp = args.extra + [x for x in ('boot','recovery','system','userdata','cache') if getattr(args, x)]
-    backup_partitions = odict((p,('%s.tar.gz'%p, None, None)) for p in rp)
+    backup_partitions = odict((p,BackupPlan('%s.tar.gz'%p, None, None)) for p in rp)
 else:
     rp = args.extra + [x for x in ('boot','recovery') if getattr(args, x)]
-    backup_partitions = odict((p,('%s.emmc.win'%p, None, None)) for p in rp)
+    backup_partitions = odict((p,BackupPlan('%s.emmc.win'%p, None, None)) for p in rp)
     mp = [x for x in ('cache','system') if getattr(args, x)]
-    backup_partitions.update((p,('%s.ext4.win'%p, '/%s'%p, '-p')) for p in mp)
+    backup_partitions.update((p,BackupPlan('%s.ext4.win'%p, '/%s'%p, '-p')) for p in mp)
 
     if args.userdata:
         data_omit = []
         if not args.media: data_omit.append("media*")
         if not args.data_cache: data_omit.append("*-cache")
-        backup_partitions['userdata'] = ('data.ext4.win', '/data', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
+        backup_partitions['userdata'] = BackupPlan('data.ext4.win', '/data', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
 
 # check that all partitions intended for backup exist
 missing = set(backup_partitions) - set(partmap)
 
-# print partition map
+# print partition map and backup explanation
 if args.dry_run or missing or args.verbose > 0:
-    print()
-    print(tabulate( [[ devname, partname, size//2, mountpoint, fstype]
-                     + backup_how(partname, backup_partitions)
-                       for partname, (devname, partn, size, mountpoint, fstype) in partmap.items() ]
-                    +[[ '', 'Total:', sum(size//2 for devname, partn, size, mountpoint, fstype in partmap.values()), '', '', '', '']],
-                    [ 'BLOCK DEVICE','NAME','SIZE (KiB)','MOUNT POINT','FSTYPE','FILENAME','FORMAT' ] ))
+    print("\nPartition map:\n")
+    print(tabulate( [[ p.devname, p.partname + (' (standard %s)'%standard if p.partname!=standard else ''), p.size//2, p.mountpoint, p.fstype] for standard, p in partmap.items() ]
+                    +[[ '', 'Total:', sum(p.size//2 for p in partmap.values()), '', '' ]],
+                    [ 'BLOCK DEVICE','PARTITION NAME','SIZE (KiB)','MOUNT POINT','FSTYPE' ] ))
+
+    print("\nBackup plan:\n")
+    print(tabulate( [[standard] + backup_how(standard, backup_partitions) for standard in backup_partitions ],
+                    [ 'PARTITION NAME','FILENAME','FORMAT' ] ))
     print()
 
 if missing:
-    p.error("Partitions were requested for backup, but not found in the partition map: %s" % ', '.join(missing))
+    p.error("These partitions were requested for backup, but not found in the partition map: %s" % ', '.join(missing))
 
 if args.dry_run:
     p.exit()
@@ -175,8 +195,8 @@ print("Saving backup images in %s/ ..." % backupdir, file=stderr)
 if args.verify:
     adb.check_call(('shell','rm -f /tmp/md5in; mknod /tmp/md5in p'), stderr=sp.DEVNULL)
 
-for partname, (fn, mount, taropts) in backup_partitions.items():
-    devname, partn, size, mountpoint, fstype = partmap[partname]
+for standard, (fn, mount, taropts) in backup_partitions.items():
+    partname, devname, partn, size, mountpoint, fstype = partmap[standard]
 
     if mount:
         print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (devname, mount, size/2048))
