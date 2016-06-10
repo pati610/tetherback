@@ -31,7 +31,7 @@ p.add_argument('-f', '--force', action='store_true', help="DANGEROUS! DO NOT USE
 g = p.add_argument_group('Data transfer methods',
                          description="The default is to use TCP forwarding. If you have problems, please try --base64 for a slow but reliable transfer method (and report issues at http://github.com/dlenski/tetherback/issues)")
 x = g.add_mutually_exclusive_group()
-x.add_argument('-t','--tcp', dest='transport', action='store_const', const=adbxp.tcp, default=adbxp.tcp,
+x.add_argument('-t','--tcp', dest='transport', action='store_const', const=adbxp.tcp, default=None,
                help="ADB TCP forwarding (fast, should work with any host OS, but prone to timing problems)")
 x.add_argument('-x','--exec-out', dest='transport', action='store_const', const=adbxp.pipe_xo,
                help="ADB exec-out binary pipe (should work with any host OS, but only with newer versions of adb and TWRP)")
@@ -66,6 +66,9 @@ if adbversion<(1,0,31):
     p.error("found ADB version %s, but version >= 1.0.31 is required" % adbversions)
 else:
     print("Found ADB version %s" % adbversions, file=stderr)
+
+if args.transport is None:
+    args.transport = adbxp.pipe_xo if adbversion>=(1,0,32) else adbxp.tcp
 
 if adbversion<(1,0,32) and args.transport==adbxp.pipe_xo:
     print("WARNING: exec-out pipe (--exec-out) probably won't work with ADB version < 1.0.32 (you have %s)" % adbversions, file=stderr)

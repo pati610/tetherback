@@ -158,7 +158,8 @@ changing the terminal settings
 ([another StackOverflow answer](http://stackoverflow.com/a/20141481/20789)),
 though apparently it does not work with Windows builds of `adb`.
 
-TCP forwarding is used *by default*. If you have problems, please try
+*By default*, tetherback uses TCP forwarding with older versions of `adb`, and an `exec-out` binary pipe with newer versions (1.0.32+).
+If you have problems, please try
 `--base64` for a slow but reliable transfer method, and please
 [report any data corruption issues](http://github.com/dlenski/tetherback/issues). If
 your host OS is Linux, `--pipe` should be faster and more reliable.
