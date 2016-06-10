@@ -181,17 +181,21 @@ if missing:
 if args.dry_run:
     p.exit()
 
-# check for optional backup path
+########################################
+
+# Okay, now it's time to actually... back up the partitions!
+
+# Create the backup directory
 if not os.path.exists(args.output_path):
    print("Creating backup directory %s" % args.output_path, file=stderr)
    os.mkdir(args.output_path)
 
-# backup partitions
 backupdir = os.path.join(args.output_path, ("nandroid-backup-" if args.nandroid else "twrp-backup-") + datetime.datetime.now().strftime('%Y-%m-%d--%H-%M-%S'))
 os.mkdir(backupdir)
 os.chdir(backupdir)
 print("Saving backup images in %s/ ..." % backupdir, file=stderr)
 
+# Create a FIFO for device-side md5 generation
 if args.verify:
     adb.check_call(('shell','rm -f /tmp/md5in; mknod /tmp/md5in p'), stderr=sp.DEVNULL)
 
