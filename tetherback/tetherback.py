@@ -50,8 +50,10 @@ args = p.parse_args()
 # check ADB version
 try:
     output = sp.check_output(('adb','version')).decode()
+except FileNotFoundError:
+    p.error("could not call adb binary -- is it in your PATH?\n\thttp://developer.android.com/tools/help/adb.html")
 except sp.CalledProcessError:
-    p.error("could not determine ADB version -- is the adb binary in your PATH?\n\thttp://developer.android.com/tools/help/adb.html")
+    p.error("could not determine ADB version")
 
 m = re.search(r'^Android Debug Bridge version ((?:\d+.)+\d+)', output)
 if not m:
