@@ -16,5 +16,5 @@ setup(name="tetherback",
       license='GPL v3 or later',
       url="https://github.com/dlenski/tetherback",
       packages=["tetherback"],
-      entry_points={ 'console_scripts': [ 'tetherback=tetherback.tetherback' ] }
+      entry_points={ 'console_scripts': [ 'tetherback=tetherback.__main__' ] }
       )
