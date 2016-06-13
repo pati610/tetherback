@@ -20,7 +20,7 @@ from .adb_stuff import *
 
 adbxp = Enum('AdbTransport', 'tcp pipe_xo pipe_b64 pipe_bin')
 PartInfo = namedtuple('PartInfo', 'partname devname partn size mountpoint fstype')
-BackupPlan = namedtuple('BackupPlan', 'fn mount taropts')
+BackupPlan = namedtuple('BackupPlan', 'fn taropts')
 
 please_report = """Please report this issue at https://github.com/dlenski/tetherback/issues
 Please post the entire output from tetherback!"""
@@ -153,29 +153,19 @@ def plan_backup(args):
     # Build table of partitions requested for backup
     if args.nandroid:
         rp = args.extra + [x for x in ('boot','recovery','system','userdata','cache') if getattr(args, x)]
-        backup_partitions = odict((p,BackupPlan('%s.tar.gz'%p, None, None)) for p in rp)
+        backup_partitions = odict((p,BackupPlan('%s.tar.gz'%p, None)) for p in rp)
     else:
         rp = args.extra + [x for x in ('boot','recovery') if getattr(args, x)]
-        backup_partitions = odict((p,BackupPlan('%s.emmc.win'%p, None, None)) for p in rp)
+        backup_partitions = odict((p,BackupPlan('%s.emmc.win'%p, None)) for p in rp)
         mp = [x for x in ('cache','system') if getattr(args, x)]
-        backup_partitions.update((p,BackupPlan('%s.ext4.win'%p, '/%s'%p, '-p')) for p in mp)
+        backup_partitions.update((p,BackupPlan('%s.ext4.win'%p, '-p')) for p in mp)
 
         if args.userdata:
             data_omit = []
             if not args.media: data_omit.append("media*")
             if not args.data_cache: data_omit.append("*-cache")
-            backup_partitions['userdata'] = BackupPlan('data.ext4.win', '/data', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
+            backup_partitions['userdata'] = BackupPlan('data.ext4.win', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
     return backup_partitions
-
-def backup_how(devname, bp):
-    if devname not in bp:
-        return [None, None]
-    else:
-        fn, mount, taropts = bp[devname]
-        if mount:
-            return [fn, "tar -czC %s %s" % (mount, taropts)]
-        else:
-            return [fn, "gzipped raw image"]
 
 def show_partmap_and_plan(partmap, backup_partitions):
     print("\nPartition map:\n")
@@ -184,7 +174,7 @@ def show_partmap_and_plan(partmap, backup_partitions):
                     [ 'BLOCK DEVICE','PARTITION NAME','SIZE (KiB)','MOUNT POINT','FSTYPE' ] ))
 
     print("\nBackup plan:\n")
-    print(tabulate( [[standard] + backup_how(standard, backup_partitions) for standard in backup_partitions ],
+    print(tabulate( [[standard, fn,  "gzipped raw image" if taropts is None else "tar -cz "+taropts] for standard, (fn, taropts) in backup_partitions.items() ],
                     [ 'PARTITION NAME','FILENAME','FORMAT' ] ))
     print()
 
@@ -207,18 +197,18 @@ def backup_partition(adb, pi, plan, transport, verify=True):
         tmpdir = adb.check_output(('shell', 'mktemp -d')).strip()
         adb.check_call(('shell','mknod %s/md5in p'%tmpdir))
 
-    if plan.mount:
-        print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (pi.devname, plan.mount, pi.size/2048))
-        fstype = really_mount(adb, '/dev/block/'+pi.devname, plan.mount)
+    if plan.taropts:
+        print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (pi.devname, pi.mountpoint, pi.size/2048))
+        fstype = really_mount(adb, '/dev/block/'+pi.devname, pi.mountpoint)
         if not fstype:
-            raise RuntimeError('%s: could not mount %s' % (pi.partname, plan.mount))
-        elif fstype != 'ext4':
-            raise RuntimeError('%s: expected ext4 filesystem, but found %s' % (pi.partname, fstype))
-        cmdline = 'tar -czC %s %s . 2> /dev/null' % (plan.mount, plan.taropts or '')
+            raise RuntimeError('%s: could not mount %s' % (pi.partname, pi.mountpoint))
+        if fstype != pi.fstype:
+            raise RuntimeError('%s: expected %s filesystem, but found %s' % (pi.partname, pi.fstype, fstype))
+        cmdline = 'tar -czC %s %s . 2> /dev/null' % (pi.mountpoint, plan.taropts or '')
     else:
         print("Saving partition %s (%s), %d MiB uncompressed..." % (pi.partname, pi.devname, pi.size/2048))
-        if not really_umount(adb, '/dev/block/'+pi.devname, plan.mount):
-            raise RuntimeError('%s: could not unmount %s' % (pi.partname, plan.mount))
+        if not really_umount(adb, '/dev/block/'+pi.devname, pi.mountpoint):
+            raise RuntimeError('%s: could not unmount %s' % (pi.partname, pi.mountpoint))
         cmdline = 'dd if=/dev/block/%s 2> /dev/null | gzip -f' % pi.devname
 
     if verify:
