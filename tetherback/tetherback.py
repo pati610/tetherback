@@ -9,7 +9,7 @@ import subprocess as sp
 import os, sys, datetime, socket, time, argparse, re
 from sys import stderr
 from base64 import standard_b64decode as b64dec
-from progressbar import ProgressBar, Percentage, ETA, FileTransferSpeed, Bar, DataSize
+from progressbar import ProgressBar, Percentage, ETA, FileTransferSpeed, DataSize
 from tabulate import tabulate
 from enum import Enum
 from hashlib import md5
