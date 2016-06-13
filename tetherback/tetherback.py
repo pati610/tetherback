@@ -153,28 +153,28 @@ def plan_backup(args):
     # Build table of partitions requested for backup
     if args.nandroid:
         rp = args.extra + [x for x in ('boot','recovery','system','userdata','cache') if getattr(args, x)]
-        backup_partitions = odict((p,BackupPlan('%s.tar.gz'%p, None)) for p in rp)
+        plan = odict((p,BackupPlan('%s.tar.gz'%p, None)) for p in rp)
     else:
         rp = args.extra + [x for x in ('boot','recovery') if getattr(args, x)]
-        backup_partitions = odict((p,BackupPlan('%s.emmc.win'%p, None)) for p in rp)
+        plan = odict((p,BackupPlan('%s.emmc.win'%p, None)) for p in rp)
         mp = [x for x in ('cache','system') if getattr(args, x)]
-        backup_partitions.update((p,BackupPlan('%s.ext4.win'%p, '-p')) for p in mp)
+        plan.update((p,BackupPlan('%s.ext4.win'%p, '-p')) for p in mp)
 
         if args.userdata:
             data_omit = []
             if not args.media: data_omit.append("media*")
             if not args.data_cache: data_omit.append("*-cache")
-            backup_partitions['userdata'] = BackupPlan('data.ext4.win', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
-    return backup_partitions
+            plan['userdata'] = BackupPlan('data.ext4.win', '-p'+''.join(' --exclude="%s"'%x for x in data_omit))
+    return plan
 
-def show_partmap_and_plan(partmap, backup_partitions):
+def show_partmap_and_plan(partmap, plan):
     print("\nPartition map:\n")
     print(tabulate( [[ p.devname, p.partname + (' (standard %s)'%standard if p.partname!=standard else ''), p.size//2, p.mountpoint, p.fstype] for standard, p in partmap.items() ]
                     +[[ '', 'Total:', sum(p.size//2 for p in partmap.values()), '', '' ]],
                     [ 'BLOCK DEVICE','PARTITION NAME','SIZE (KiB)','MOUNT POINT','FSTYPE' ] ))
 
     print("\nBackup plan:\n")
-    print(tabulate( [[standard, fn,  "gzipped raw image" if taropts is None else "tar -cz "+taropts] for standard, (fn, taropts) in backup_partitions.items() ],
+    print(tabulate( [[standard, fn,  "gzipped raw image" if taropts is None else "tar -cz "+taropts] for standard, (fn, taropts) in plan.items() ],
                     [ 'PARTITION NAME','FILENAME','FORMAT' ] ))
     print()
 
@@ -191,20 +191,20 @@ def create_backupdir(args, timestamp=None):
     os.mkdir(backupdir)
     return backupdir
 
-def backup_partition(adb, pi, plan, transport, verify=True):
+def backup_partition(adb, pi, bp, transport, verify=True):
     # Create a FIFO for device-side md5 generation
     if verify:
         tmpdir = adb.check_output(('shell', 'mktemp -d')).strip()
         adb.check_call(('shell','mknod %s/md5in p'%tmpdir))
 
-    if plan.taropts:
+    if bp.taropts:
         print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (pi.devname, pi.mountpoint, pi.size/2048))
         fstype = really_mount(adb, '/dev/block/'+pi.devname, pi.mountpoint)
         if not fstype:
             raise RuntimeError('%s: could not mount %s' % (pi.partname, pi.mountpoint))
         if fstype != pi.fstype:
             raise RuntimeError('%s: expected %s filesystem, but found %s' % (pi.partname, pi.fstype, fstype))
-        cmdline = 'tar -czC %s %s . 2> /dev/null' % (pi.mountpoint, plan.taropts or '')
+        cmdline = 'tar -czC %s %s . 2> /dev/null' % (pi.mountpoint, bp.taropts or '')
     else:
         print("Saving partition %s (%s), %d MiB uncompressed..." % (pi.partname, pi.devname, pi.size/2048))
         if not really_umount(adb, '/dev/block/'+pi.devname, pi.mountpoint):
@@ -243,10 +243,10 @@ def backup_partition(adb, pi, plan, transport, verify=True):
         s.connect(('localhost', port))
         block_iter = iter(lambda: s.recv(65536), b'')
 
-    pbwidgets = ['  %s: ' % plan.fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed(), ' ', DataSize() ]
+    pbwidgets = ['  %s: ' % bp.fn, Percentage(), ' ', ETA(), ' ', FileTransferSpeed(), ' ', DataSize() ]
     pbar = ProgressBar(max_value=pi.size*512, widgets=pbwidgets).start()
 
-    with open(plan.fn, 'wb') as out:
+    with open(bp.fn, 'wb') as out:
         for block in block_iter:
             out.write(block)
             if verify:
@@ -261,8 +261,8 @@ def backup_partition(adb, pi, plan, transport, verify=True):
         localmd5 = localmd5.hexdigest()
         if devicemd5 != localmd5:
             raise RuntimeError("md5sum mismatch (local %s, device %s)" % (localmd5, devicemd5))
-        with open(plan.fn+'.md5', 'w') as md5out:
-            print('%s *%s' % (localmd5, plan.fn), file=md5out)
+        with open(bp.fn+'.md5', 'w') as md5out:
+            print('%s *%s' % (localmd5, bp.fn), file=md5out)
 
     child.wait()
     if transport==adbxp.tcp:
@@ -283,12 +283,12 @@ def main(args=None):
 
     # build partition map and backup plan
     partmap = build_partmap(adb)
-    backup_partitions = plan_backup(args)
-    missing = set(backup_partitions) - set(partmap)
+    plan = plan_backup(args)
+    missing = set(plan) - set(partmap)
 
     # print partition map and backup explanation
     if args.dry_run or missing or args.verbose > 0:
-        show_partmap_and_plan(partmap, backup_partitions)
+        show_partmap_and_plan(partmap, plan)
 
     if missing & {'cache','system','data','boot'}:
         p.error("Standard partitions were requested for backup, but not found in the partition map: %s%s" % (', '.join(missing), please_report))
@@ -304,7 +304,7 @@ def main(args=None):
     print("Saving backup images in %s/ ..." % backupdir, file=stderr)
 
     # Okay, now it's time to actually... back up the partitions!
-    for standard, plan in backup_partitions.items():
-        backup_partition(adb, partmap[standard], plan, args.transport, args.verify)
+    for standard, bp in plan.items():
+        backup_partition(adb, partmap[standard], bp, args.transport, args.verify)
 
     print("Backup complete.", file=stderr)
