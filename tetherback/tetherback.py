@@ -29,7 +29,7 @@ p.add_argument('-V', '--no-verify', dest='verify', default=True, action='store_f
 p.add_argument('-v', '--verbose', action='count', default=0)
 p.add_argument('-f', '--force', action='store_true', help="DANGEROUS! DO NOT USE! (Tries to proceed even if TWRP recovery is not detected.)")
 g = p.add_argument_group('Data transfer methods',
-                         description="The default is to use TCP forwarding. If you have problems, please try --base64 for a slow but reliable transfer method (and report issues at http://github.com/dlenski/tetherback/issues)")
+                         description="The default is --exec-out with adb v1.0.32 or newer, and --tcp with older versions. If you have problems, please try --base64 for a slow but reliable transfer method (and report issues at http://github.com/dlenski/tetherback/issues)")
 x = g.add_mutually_exclusive_group()
 x.add_argument('-t','--tcp', dest='transport', action='store_const', const=adbxp.tcp, default=None,
                help="ADB TCP forwarding (fast, should work with any host OS, but prone to timing problems)")
@@ -67,13 +67,23 @@ if adbversion<(1,0,31):
 else:
     print("Found ADB version %s" % adbversions, file=stderr)
 
-if args.transport is None:
-    args.transport = adbxp.pipe_xo if adbversion>=(1,0,32) else adbxp.tcp
-
-if adbversion<(1,0,32) and args.transport==adbxp.pipe_xo:
-    print("WARNING: exec-out pipe (--exec-out) probably won't work with ADB version < 1.0.32 (you have %s)" % adbversions, file=stderr)
-elif not sys.platform.startswith('linux') and args.transport==adbxp.pipe_bin:
-    print("WARNING: binary pipe (--pipe) will PROBABLY CORRUPT DATA on non-Linux host", file=stderr)
+if args.transport==adbxp.pipe_xo and adbversion<(1,0,32):
+    print("WARNING: exec-out pipe (--exec-out) won't work with ADB version < 1.0.32; changing to TCP" % adbversions, file=stderr)
+    args.transport = adbxp.tcp
+elif args.transport==adbxp.pipe_bin:
+    if adbversion>=(1,0,32):
+        print("WARNING: adb shell pipe (--pipe) not needed with ADB >= 1.0.32; changing to adb exec-out pipe", file=stderr)
+        args.transport = adbxp.pipe_xo
+    elif sys.platform.startswith('linux'):
+        print("WARNING: adb shell pipe (--pipe) only works on Linux host; changing to TCP", file=stderr)
+        args.transport = adbxp.tcp
+elif args.transport is None:
+    if adbversion>=(1,0,32):
+        print("Using default transfer method: adb exec-out pipe (--exec-out)", file=stderr)
+        args.transport = adbxp.pipe_xo
+    else:
+        print("Using default transfer method: adb TCP forwarding (--tcp)", file=stderr)
+        args.transport = adbxp.tcp
 
 ########################################
 
