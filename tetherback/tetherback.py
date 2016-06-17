@@ -194,8 +194,7 @@ def create_backupdir(args, timestamp=None):
 def backup_partition(adb, pi, bp, transport, verify=True):
     # Create a FIFO for device-side md5 generation
     if verify:
-        tmpdir = adb.check_output(('shell', 'mktemp -d')).strip()
-        adb.check_call(('shell','mknod %s/md5in p'%tmpdir))
+        adb.check_call(('shell','rm -f /tmp/md5in /tmp/md5out 2> /dev/null; mknod /tmp/md5in p'))
 
     if bp.taropts:
         print("Saving tarball of %s (mounted at %s), %d MiB uncompressed..." % (pi.devname, pi.mountpoint, pi.size/2048))
@@ -212,7 +211,7 @@ def backup_partition(adb, pi, bp, transport, verify=True):
         cmdline = 'dd if=/dev/block/%s 2> /dev/null | gzip -f' % pi.devname
 
     if verify:
-        cmdline = 'md5sum {0}/md5in > {0}/md5out & {1} | tee {0}/md5in'.format(tmpdir, cmdline)
+        cmdline = 'md5sum /tmp/md5in > /tmp/md5out & %s | tee /tmp/md5in' % cmdline
         localmd5 = md5()
 
     if transport == adbxp.pipe_bin:
@@ -257,7 +256,7 @@ def backup_partition(adb, pi, bp, transport, verify=True):
             pbar.finish()
 
     if verify:
-        devicemd5 = adb.check_output(('shell','cat {0}/md5out && rm {0}/md5out {0}/md5in'.format(tmpdir))).strip().split()[0]
+        devicemd5 = adb.check_output(('shell','cat /tmp/md5out && rm -f /tmp/md5in /tmp/md5out')).strip().split()[0]
         localmd5 = localmd5.hexdigest()
         if devicemd5 != localmd5:
             raise RuntimeError("md5sum mismatch (local %s, device %s)" % (localmd5, devicemd5))
