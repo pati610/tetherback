@@ -31,7 +31,12 @@ systems, various versions of Windows and Mac OS X.
     the Python 2.x version, while `pip3` invokes the Python 3.x version)
 
     ```
-    $ pip3 install https://github.com/dlenski/tetherback/archive/v0.3.zip
+    # Install latest development version
+    $ pip3 install https://github.com/dlenski/tetherback/archive/HEAD.zip
+
+    # Install a tagged release
+    # (replace "RELEASE" with one of the tag/release version numbers on the "Releases" page)
+    $ pip3 install https://github.com/dlenski/tetherback/archive/RELEASE.zip
     ```
 
   * Manual installation: `progressbar2` and `tabulate` packages are
